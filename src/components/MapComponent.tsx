@@ -831,12 +831,18 @@ export function MapComponent({
                             dataProjection: 'EPSG:4326'
                           }) as Feature
                           
-                          // Remove existing province mask if any
+                          // Remove existing province mask and selected province if any
                           const existingProvinceMask = layers.getArray().find(layer => 
                             layer.get('layerType') === 'provinceMask'
                           )
+                          const existingSelectedProvince = layers.getArray().find(layer => 
+                            layer.get('layerType') === 'selectedProvince'
+                          )
                           if (existingProvinceMask) {
                             layers.remove(existingProvinceMask)
+                          }
+                          if (existingSelectedProvince) {
+                            layers.remove(existingSelectedProvince)
                           }
                           
                           // Add new province mask
@@ -847,13 +853,32 @@ export function MapComponent({
                               }),
                               style: new Style({
                                 fill: new Fill({
-                                  color: 'rgba(128, 128, 128, 0.4)'
+                                  color: 'rgba(128, 128, 128, 0.6)'  // Increased opacity for grayed out areas
                                 })
                               }),
                               zIndex: 998
                             })
                             provinceMaskLayer.set('layerType', 'provinceMask')
                             layers.insertAt(layers.getLength(), provinceMaskLayer)
+                            
+                            // Add the province feature itself with completely opaque fill
+                            const provinceLayer = new VectorLayer({
+                              source: new VectorSource({
+                                features: [feature.clone()]
+                              }),
+                              style: new Style({
+                                fill: new Fill({
+                                  color: 'rgba(255, 255, 255, 1.0)'  // Completely opaque white
+                                }),
+                                stroke: new Stroke({
+                                  color: '#0072bc',
+                                  width: 2
+                                })
+                              }),
+                              zIndex: 999  // Higher z-index to appear above mask
+                            })
+                            provinceLayer.set('layerType', 'selectedProvince')
+                            layers.insertAt(layers.getLength(), provinceLayer)
                           }
                         })
                       })
@@ -1137,12 +1162,18 @@ export function MapComponent({
     const map = mapInstanceRef.current
     const layers = map.getLayers()
     
-    // Remove province mask layer
+    // Remove province mask and selected province layers
     const provinceMaskLayer = layers.getArray().find(layer => 
       layer.get('layerType') === 'provinceMask'
     )
+    const selectedProvinceLayer = layers.getArray().find(layer => 
+      layer.get('layerType') === 'selectedProvince'
+    )
     if (provinceMaskLayer) {
       layers.remove(provinceMaskLayer)
+    }
+    if (selectedProvinceLayer) {
+      layers.remove(selectedProvinceLayer)
     }
     
     // Restore country view
