@@ -7,6 +7,8 @@ import XYZ from 'ol/source/XYZ'
 import { defaults as defaultControls, Zoom, ScaleLine } from 'ol/control'
 import { GeoJSON } from 'ol/format'
 import { Style, Stroke, Fill } from 'ol/style'
+import { Polygon, MultiPolygon } from 'ol/geom'
+import Feature from 'ol/Feature'
 import { Download, ChartBar, Table, MapPin, CaretDown } from '@phosphor-icons/react'
 import { ChartView, TableView } from './DataVisualization'
 import { RasterLegend } from './RasterLegend'
@@ -505,97 +507,96 @@ export function MapComponent({
         
         // Create a mask layer that covers the entire world and greys out areas outside the boundary
         const worldExtent = [-180, -90, 180, 90]
-        const worldGeometry = {
-          type: "Polygon",
-          coordinates: [[
-            [worldExtent[0], worldExtent[1]], // bottom-left
-            [worldExtent[2], worldExtent[1]], // bottom-right
-            [worldExtent[2], worldExtent[3]], // top-right
-            [worldExtent[0], worldExtent[3]], // top-left
-            [worldExtent[0], worldExtent[1]]  // close polygon
-          ]]
-        }
         
         // Get the boundary geometry to create holes in the mask
         const boundaryFeatures = boundarySource.getFeatures()
-        let maskGeometry = worldGeometry
+        let maskLayer: VectorLayer<VectorSource> | null = null
         
         if (boundaryFeatures.length > 0) {
           try {
-            // Create holes in the world polygon for each boundary feature
-            const holes: number[][][] = []
+            // Create a unified geometry from all boundary features
+            // We need to be smart about handling holes vs separate administrative units
+            let allExteriorRings: number[][][] = []
             
             boundaryFeatures.forEach(feature => {
               const geom = feature.getGeometry()
+              
               if (geom?.getType() === 'Polygon') {
-                const coords = (geom as any).getCoordinates()
-                // For polygons, only use the exterior ring (first coordinate array)
-                // Interior rings represent actual holes within the administrative unit and should not be cut out of the mask
+                const coords = (geom as Polygon).getCoordinates()
+                // Only add the exterior ring - interior rings are actual holes within the admin unit
                 if (coords && coords.length > 0) {
-                  holes.push(coords[0]) // Only the exterior ring - each feature is a separate admin unit
+                  allExteriorRings.push(coords[0])
                 }
               } else if (geom?.getType() === 'MultiPolygon') {
-                const coords = (geom as any).getCoordinates()
+                const coords = (geom as MultiPolygon).getCoordinates()
                 coords.forEach((polygon: number[][][]) => {
-                  // For each polygon in the multipolygon, only use the exterior ring
-                  // Each polygon represents a separate part of the same administrative unit
+                  // For each polygon in the multipolygon, only add the exterior ring
+                  // Each separate polygon represents a different part of the country (like islands)
                   if (polygon && polygon.length > 0) {
-                    holes.push(polygon[0]) // Only the exterior ring - ignore interior holes
+                    allExteriorRings.push(polygon[0])
                   }
                 })
               }
             })
             
-            if (holes.length > 0) {
-              maskGeometry = {
-                type: "Polygon",
-                coordinates: [worldGeometry.coordinates[0], ...holes]
-              }
+            console.log('Created unified boundary with', allExteriorRings.length, 'exterior rings')
+            
+            // Create the world polygon with holes for all administrative boundary exterior rings
+            const maskGeometry = {
+              type: "Polygon",
+              coordinates: [[
+                [worldExtent[0], worldExtent[1]], // bottom-left
+                [worldExtent[2], worldExtent[1]], // bottom-right
+                [worldExtent[2], worldExtent[3]], // top-right
+                [worldExtent[0], worldExtent[3]], // top-left
+                [worldExtent[0], worldExtent[1]]  // close polygon
+              ], ...allExteriorRings] // Add all exterior rings as holes in the world mask
             }
+            
+            // Create mask source and layer
+            const maskSource = new VectorSource()
+            const geojsonFormat = new GeoJSON()
+            
+            // Create a GeoJSON feature object
+            const maskGeoJSON = {
+              type: "Feature",
+              geometry: maskGeometry,
+              properties: {}
+            }
+            
+            try {
+              const maskFeature = geojsonFormat.readFeature(maskGeoJSON, {
+                featureProjection: 'EPSG:4326',
+                dataProjection: 'EPSG:4326'
+              })
+              
+              if (Array.isArray(maskFeature)) {
+                maskSource.addFeatures(maskFeature)
+              } else {
+                maskSource.addFeature(maskFeature)
+              }
+              
+              maskLayer = new VectorLayer({
+                source: maskSource,
+                style: new Style({
+                  fill: new Fill({
+                    color: 'rgba(128, 128, 128, 0.4)' // Grey overlay with 40% opacity
+                  })
+                }),
+                zIndex: 999 // Below boundary but above basemap
+              })
+              
+              maskLayer.set('layerType', 'countryMask')
+              console.log('Created country mask layer')
+              
+            } catch (error) {
+              console.error('Error creating mask feature:', error)
+            }
+            
           } catch (error) {
             console.error('Error creating mask geometry:', error)
-            // Fallback to original world geometry
-            maskGeometry = worldGeometry
           }
         }
-        
-        // Create mask source and layer
-        const maskSource = new VectorSource()
-        const geojsonFormat = new GeoJSON()
-        
-        // Create a GeoJSON feature object
-        const maskGeoJSON = {
-          type: "Feature",
-          geometry: maskGeometry,
-          properties: {}
-        }
-        
-        try {
-          const maskFeature = geojsonFormat.readFeature(maskGeoJSON, {
-            featureProjection: 'EPSG:4326',
-            dataProjection: 'EPSG:4326'
-          })
-          
-          if (Array.isArray(maskFeature)) {
-            maskSource.addFeatures(maskFeature)
-          } else {
-            maskSource.addFeature(maskFeature)
-          }
-        } catch (error) {
-          console.error('Error creating mask feature:', error)
-        }
-        
-        const maskLayer = new VectorLayer({
-          source: maskSource,
-          style: new Style({
-            fill: new Fill({
-              color: 'rgba(128, 128, 128, 0.4)' // Grey overlay with 40% opacity
-            })
-          }),
-          zIndex: 999 // Below boundary but above basemap
-        })
-        
-        maskLayer.set('layerType', 'countryMask')
         
         // Create the boundary layer with black stroke and no fill
         const boundaryLayer = new VectorLayer({
@@ -618,10 +619,14 @@ export function MapComponent({
         console.log('Created boundary and mask layers')
         
         // Add both layers to the map
-        map.addLayer(maskLayer)
-        map.addLayer(boundaryLayer)
+        if (maskLayer) {
+          layers.insertAt(layers.getLength(), maskLayer)
+          console.log('Added country mask layer')
+        }
+        layers.insertAt(layers.getLength(), boundaryLayer)
+        console.log('Added boundary layer')
         
-        console.log('Added boundary and mask layers to map. Total layers now:', map.getLayers().getLength())
+        console.log('Added boundary and mask layers to map. Total layers now:', layers.getLength())
         
         // Force a re-render to ensure the layer appears
         map.renderSync()

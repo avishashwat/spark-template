@@ -43,27 +43,89 @@ export function SimpleRasterConfig({ file, onSave, onCancel }: SimpleRasterConfi
     try {
       setIsAnalyzing(true)
       
-      // Simulate raster analysis - in production this would use actual file processing
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      
-      // Generate mock statistics based on file name patterns
-      const fileName = file.name.toLowerCase()
-      let stats = { min: 0, max: 100, mean: 50 }
-      
-      if (fileName.includes('temp') || fileName.includes('temperature')) {
-        stats = { min: -10, max: 45, mean: 18.5 }
-      } else if (fileName.includes('precip') || fileName.includes('rainfall')) {
-        stats = { min: 0, max: 2500, mean: 800 }
-      } else if (fileName.includes('flood')) {
-        stats = { min: 0, max: 1, mean: 0.15 }
-      } else if (fileName.includes('drought')) {
-        stats = { min: 0, max: 1, mean: 0.25 }
+      // Real raster analysis using GeoTIFF
+      try {
+        // Import GeoTIFF dynamically to handle ES modules
+        const { fromBlob } = await import('geotiff')
+        
+        // Read the raster file
+        const tiff = await fromBlob(file)
+        const image = await tiff.getImage()
+        const rasters = await image.readRasters()
+        
+        // Get the first band data - ensure it's an array
+        const rasterData = rasters[0]
+        if (typeof rasterData === 'number') {
+          throw new Error('Invalid raster data format')
+        }
+        
+        // Convert to regular array for easier processing
+        const dataArray = Array.from(rasterData)
+        
+        // Calculate statistics, excluding nodata values
+        const noDataValue = image.getGDALNoData() || null
+        let validData: number[] = []
+        
+        for (let i = 0; i < dataArray.length; i++) {
+          const value = dataArray[i]
+          if (noDataValue === null || value !== noDataValue) {
+            // Also exclude common nodata values like -9999, -32768, etc.
+            if (value !== -9999 && value !== -32768 && value !== -3.4028235e+38 && !isNaN(value) && isFinite(value)) {
+              validData.push(value)
+            }
+          }
+        }
+        
+        if (validData.length === 0) {
+          throw new Error('No valid pixel values found in raster')
+        }
+        
+        // Calculate statistics
+        const sortedData = validData.sort((a, b) => a - b)
+        const min = sortedData[0]
+        const max = sortedData[sortedData.length - 1]
+        const sum = validData.reduce((acc, val) => acc + val, 0)
+        const mean = sum / validData.length
+        
+        const stats = {
+          min: parseFloat(min.toFixed(6)),
+          max: parseFloat(max.toFixed(6)),
+          mean: parseFloat(mean.toFixed(6))
+        }
+        
+        console.log('Real raster analysis results:', {
+          fileName: file.name,
+          totalPixels: dataArray.length,
+          validPixels: validData.length,
+          noDataValue,
+          stats
+        })
+        
+        setRasterStats(stats)
+        updateClassesFromStats(stats)
+        toast.success(`Raster analyzed: ${validData.length} valid pixels found`)
+        
+      } catch (geoTiffError) {
+        console.error('GeoTIFF analysis failed, using fallback:', geoTiffError)
+        
+        // Fallback to pattern-based statistics if GeoTIFF fails
+        const fileName = file.name.toLowerCase()
+        let stats = { min: 0, max: 100, mean: 50 }
+        
+        if (fileName.includes('temp') || fileName.includes('temperature')) {
+          stats = { min: -10, max: 45, mean: 18.5 }
+        } else if (fileName.includes('precip') || fileName.includes('rainfall')) {
+          stats = { min: 0, max: 2500, mean: 800 }
+        } else if (fileName.includes('flood')) {
+          stats = { min: 0, max: 1, mean: 0.15 }
+        } else if (fileName.includes('drought')) {
+          stats = { min: 0, max: 1, mean: 0.25 }
+        }
+        
+        setRasterStats(stats)
+        updateClassesFromStats(stats)
+        toast.warning('Using pattern-based statistics - could not read raster file directly')
       }
-      
-      setRasterStats(stats)
-      
-      // Update class ranges based on statistics
-      updateClassesFromStats(stats)
       
     } catch (error) {
       console.error('Failed to analyze raster:', error)
