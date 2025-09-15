@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -230,24 +229,23 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
                 { id: 'giri', label: 'GIRI Hazards', icon: Drop, color: 'text-blue-600' },
                 { id: 'energy', label: 'Energy Infrastructure', icon: Flashlight, color: 'text-yellow-600' }
               ].map(({ id, label, icon: Icon, color }) => (
-                <Button
+                <button
                   key={id}
-                  variant="outline"
-                  className={`justify-start h-12 text-sm px-4 hover:bg-primary/10 border-2 hover:border-primary/30 transition-all duration-200 ${
-                    selectedCategory === id ? 'bg-primary/10 border-primary/30' : ''
+                  className={`flex items-center justify-start w-full h-12 text-sm px-4 border-2 rounded-md transition-all duration-200 hover:bg-primary/10 hover:border-primary/30 ${
+                    selectedCategory === id ? 'bg-primary/10 border-primary/30' : 'bg-white border-border'
                   }`}
                   onClick={() => handleCategoryChange(id)}
                 >
                   <Icon className={`w-4 h-4 mr-2 ${color}`} />
                   {label}
                   <Plus className="w-4 h-4 ml-auto text-muted-foreground" />
-                </Button>
+                </button>
               ))}
             </div>
           </div>
 
-          {/* Inline Selection Panel */}
-          {showSelectionPanel && selectedCategory && (
+          {/* Selection Panel */}
+          {selectedCategory && (
             <div className="space-y-3 border rounded-lg p-3 bg-blue-50/50 border-primary/20">
               <div className="flex items-center justify-between">
                 <h4 className="font-medium text-sm text-primary">
@@ -255,9 +253,15 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
                   {selectedCategory === 'giri' && 'GIRI Hazards'}
                   {selectedCategory === 'energy' && 'Energy Infrastructure'}
                 </h4>
-                <Button size="sm" variant="ghost" onClick={() => setShowSelectionPanel(false)}>
+                <button 
+                  className="text-muted-foreground hover:text-foreground p-1"
+                  onClick={() => {
+                    setShowSelectionPanel(false)
+                    setSelectedCategory('')
+                  }}
+                >
                   <X className="w-3 h-3" />
-                </Button>
+                </button>
               </div>
               
               {/* Climate Variables */}
@@ -410,15 +414,14 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
                 </div>
               )}
               
-              <Button 
+              <button 
                 onClick={addLayer}
                 disabled={!canAddLayer()}
-                className="w-full h-8 text-sm"
-                size="sm"
+                className="w-full h-8 text-sm bg-primary text-primary-foreground rounded px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors flex items-center justify-center gap-1"
               >
-                <Plus className="w-3 h-3 mr-1" />
+                <Plus className="w-3 h-3" />
                 Add Layer
-              </Button>
+              </button>
             </div>
           )}
 
@@ -439,10 +442,8 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
                           </Badge>
                         </div>
                         <div className="flex items-center gap-1 ml-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 w-6 p-0"
+                          <button
+                            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors flex items-center justify-center"
                             onClick={() => toggleLayerVisibility(layer.id)}
                           >
                             {layer.visible ? (
@@ -450,15 +451,13 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
                             ) : (
                               <EyeSlash className="w-3 h-3" />
                             )}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                          </button>
+                          <button
+                            className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-muted rounded transition-colors flex items-center justify-center"
                             onClick={() => removeLayer(layer.id)}
                           >
                             <X className="w-3 h-3" />
-                          </Button>
+                          </button>
                         </div>
                       </div>
                       

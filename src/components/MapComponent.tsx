@@ -134,7 +134,8 @@ export function MapComponent({
         new ScaleLine({
           bar: true,
           text: true,
-          minWidth: 50,
+          minWidth: 60,
+          steps: 2, // Only 2 divisions
         }),
       ]),
     })
