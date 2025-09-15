@@ -3,7 +3,8 @@ import { Map as OLMap, View } from 'ol'
 import TileLayer from 'ol/layer/Tile'
 import XYZ from 'ol/source/XYZ'
 import { defaults as defaultControls, Zoom, ScaleLine } from 'ol/control'
-import { Download } from '@phosphor-icons/react'
+import { Download, ChartBar, Table, MapPin, CaretDown } from '@phosphor-icons/react'
+import { ChartView, TableView } from './DataVisualization'
 import 'ol/ol.css'
 
 interface MapComponentProps {
@@ -22,6 +23,7 @@ interface MapComponentProps {
     year?: string
     season?: string
   }
+  mapLayout: number // Added to know if we're in multi-map mode
 }
 
 const basemapSources = {
@@ -63,15 +65,42 @@ export function MapComponent({
   onViewChange,
   country,
   basemap = 'osm',
-  overlayInfo
+  overlayInfo,
+  mapLayout
 }: MapComponentProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<OLMap | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [viewMode, setViewMode] = useState<'map' | 'chart' | 'table'>('map')
+  const [showDropdown, setShowDropdown] = useState(false)
+  
+  // Only show dropdown in multi-map mode (2 or 4 maps)
+  const showViewSelector = mapLayout > 1
+  
+  // Reset view mode to map when layout changes to single map
+  useEffect(() => {
+    if (mapLayout === 1) {
+      setViewMode('map')
+    }
+  }, [mapLayout])
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showDropdown) {
+        setShowDropdown(false)
+      }
+    }
+    
+    if (showDropdown) {
+      document.addEventListener('click', handleClickOutside)
+      return () => document.removeEventListener('click', handleClickOutside)
+    }
+  }, [showDropdown])
 
   // Initialize map
   useEffect(() => {
-    if (!mapRef.current) return
+    if (!mapRef.current || viewMode !== 'map') return
 
     const bounds = countryBounds[country as keyof typeof countryBounds]
     const centerCoord: [number, number] = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2]
@@ -101,8 +130,8 @@ export function MapComponent({
         new ScaleLine({
           className: 'ol-scale-line',
           bar: true,
-          text: true,
-          minWidth: 100,
+          text: false,
+          minWidth: 40,
         }),
       ]),
     })
@@ -130,7 +159,7 @@ export function MapComponent({
     return () => {
       map.setTarget(undefined)
     }
-  }, [basemap]) // Re-initialize when basemap changes
+  }, [basemap, viewMode]) // Re-initialize when basemap or viewMode changes
 
   // Update view when external changes occur
   useEffect(() => {
@@ -243,6 +272,14 @@ export function MapComponent({
     return text
   }
 
+  const viewModeOptions = [
+    { value: 'map', label: 'Map View', icon: MapPin },
+    { value: 'chart', label: 'Chart View', icon: ChartBar },
+    { value: 'table', label: 'Table View', icon: Table }
+  ]
+  
+  const currentViewOption = viewModeOptions.find(option => option.value === viewMode)
+
   return (
     <div className={`flex flex-col h-full border-2 rounded-lg overflow-hidden bg-white ${isActive ? 'border-primary' : 'border-border'}`}>
       {/* Map Header */}
@@ -264,8 +301,48 @@ export function MapComponent({
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Legend placeholder */}
-          {overlayInfo && (
+          {/* View Mode Selector - only in multi-map mode */}
+          {showViewSelector && (
+            <div className="relative">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowDropdown(!showDropdown)
+                }}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-muted hover:bg-muted/80 rounded border border-border transition-colors"
+              >
+                {currentViewOption && <currentViewOption.icon size={12} />}
+                <span>{currentViewOption?.label || 'Map View'}</span>
+                <CaretDown size={10} />
+              </button>
+              
+              {showDropdown && (
+                <div 
+                  className="absolute top-full right-0 mt-1 bg-white border border-border rounded shadow-lg z-50 min-w-[120px]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {viewModeOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        setViewMode(option.value as any)
+                        setShowDropdown(false)
+                      }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted transition-colors ${
+                        viewMode === option.value ? 'bg-muted text-primary' : 'text-foreground'
+                      }`}
+                    >
+                      <option.icon size={12} />
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Legend placeholder - only show in map mode */}
+          {overlayInfo && viewMode === 'map' && (
             <div className="flex items-center gap-1 text-xs">
               <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-red-500 rounded-sm"></div>
               <span className="text-muted-foreground">Legend</span>
@@ -283,12 +360,22 @@ export function MapComponent({
         </div>
       </div>
       
-      {/* Map Container */}
+      {/* Content Container */}
       <div 
-        className="flex-1 relative cursor-pointer"
-        onClick={onActivate}
+        className="flex-1 relative"
+        onClick={viewMode === 'map' ? onActivate : undefined}
       >
-        <div ref={mapRef} className="w-full h-full" />
+        {viewMode === 'map' && (
+          <div ref={mapRef} className="w-full h-full cursor-pointer" />
+        )}
+        
+        {viewMode === 'chart' && (
+          <ChartView overlayInfo={overlayInfo} country={country} />
+        )}
+        
+        {viewMode === 'table' && (
+          <TableView overlayInfo={overlayInfo} country={country} />
+        )}
       </div>
     </div>
   )

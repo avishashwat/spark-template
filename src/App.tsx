@@ -3,6 +3,7 @@ import { Header } from '@/components/Header'
 import { MapComponent } from '@/components/MapComponent'
 import { Sidebar } from '@/components/Sidebar'
 import { Dashboard } from '@/components/Dashboard'
+import { useMockData } from '@/hooks/useMockData'
 import { useKV } from '@github/spark/hooks'
 
 interface MapInstance {
@@ -20,6 +21,9 @@ interface MapInstance {
 }
 
 function App() {
+  // Initialize mock data
+  useMockData()
+  
   const [selectedCountry, setSelectedCountry] = useState('bhutan')
   const [mapLayout, setMapLayout] = useState(1)
   const [showDashboard, setShowDashboard] = useState(false)
@@ -113,6 +117,7 @@ function App() {
             country={selectedCountry}
             basemap={basemap}
             overlayInfo={mapOverlays[mapId]}
+            mapLayout={mapLayout}
           />
         </div>
       )
@@ -169,6 +174,7 @@ function App() {
             <Dashboard
               selectedCountry={selectedCountry}
               activeMapCount={mapLayout}
+              mapOverlays={mapOverlays}
             />
           </div>
         )}

@@ -7,6 +7,7 @@ import { useKV } from '@github/spark/hooks'
 interface DashboardProps {
   selectedCountry: string
   activeMapCount: number
+  mapOverlays: Record<string, any> // Add overlay information
 }
 
 interface CountryData {
@@ -28,7 +29,7 @@ interface CountryData {
   }
 }
 
-export function Dashboard({ selectedCountry, activeMapCount }: DashboardProps) {
+export function Dashboard({ selectedCountry, activeMapCount, mapOverlays }: DashboardProps) {
   const [countryRiskData] = useKV<Record<string, CountryData>>('country-risk-data', {})
   const [currentCountryData, setCurrentCountryData] = useState<CountryData | null>(null)
 
@@ -82,6 +83,39 @@ export function Dashboard({ selectedCountry, activeMapCount }: DashboardProps) {
       </CardHeader>
       
       <CardContent className="space-y-6 custom-scroll overflow-y-auto max-h-[calc(100vh-140px)] pt-6">
+        {/* Active Overlays Summary */}
+        {Object.keys(mapOverlays).length > 0 && (
+          <div className="space-y-4">
+            <h3 className="font-semibold text-foreground flex items-center gap-2">
+              <ChartBar className="w-4 h-4 text-primary" />
+              Active Overlays
+            </h3>
+            
+            <div className="grid gap-3">
+              {Object.entries(mapOverlays).map(([mapId, overlay]) => (
+                <Card key={mapId} className="p-3">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm text-foreground capitalize">
+                        Map {mapId.split('-')[1]} - {overlay.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Type: {overlay.type}
+                        {overlay.scenario && ` • ${overlay.scenario}`}
+                        {overlay.year && ` • ${overlay.year}`}
+                        {overlay.season && ` • ${overlay.season}`}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="text-xs">
+                      {overlay.type}
+                    </Badge>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+        
         {/* Climate Risk Summary */}
         <div className="space-y-4">
           <h3 className="font-semibold text-foreground flex items-center gap-2">
