@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Map as OLMap, View } from 'ol'
 import TileLayer from 'ol/layer/Tile'
-import OSM from 'ol/source/OSM'
+import XYZ from 'ol/source/XYZ'
 import { fromLonLat, toLonLat } from 'ol/proj'
 import { defaults as defaultControls, Zoom } from 'ol/control'
 import 'ol/ol.css'
@@ -46,7 +46,10 @@ export function MapComponent({
       target: mapRef.current,
       layers: [
         new TileLayer({
-          source: new OSM(),
+          source: new XYZ({
+            url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+            attributions: 'Tiles © Esri — Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012'
+          }),
         }),
       ],
       view: new View({
