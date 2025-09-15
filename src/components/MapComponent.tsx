@@ -262,19 +262,38 @@ export function MapComponent({
     
     const loadBoundaryLayer = async () => {
       try {
+        console.log('=== Loading boundary layer for country:', country, '===')
+        
         // Get boundary files from storage
         const boundaryFiles = await window.spark.kv.get<any[]>('admin_boundary_files') || []
-        console.log('All boundary files:', boundaryFiles)
-        console.log('Looking for country:', country)
+        console.log('All boundary files loaded from KV:', boundaryFiles.length)
+        console.log('Boundary files details:', boundaryFiles.map(f => ({
+          id: f.id,
+          name: f.name,
+          country: f.country,
+          hasGeojson: !!f.geojsonData,
+          featureCount: f.geojsonData?.features?.length || 0
+        })))
         
         // Find boundary file for current country
         const countryBoundary = boundaryFiles.find(file => file.country === country)
-        console.log('Found boundary for country:', countryBoundary)
+        console.log('Found boundary for country:', country, ':', !!countryBoundary)
         
-        if (!countryBoundary || !countryBoundary.geojsonData) {
+        if (!countryBoundary) {
           console.log(`No boundary file found for country: ${country}`)
           return
         }
+        
+        if (!countryBoundary.geojsonData) {
+          console.error('Boundary file found but no geojsonData:', countryBoundary)
+          return
+        }
+        
+        console.log('GeoJSON data structure:', {
+          type: countryBoundary.geojsonData.type,
+          features: countryBoundary.geojsonData.features?.length,
+          firstFeature: countryBoundary.geojsonData.features?.[0]?.geometry?.type
+        })
         
         // Remove existing boundary and mask layers if any
         const map = mapInstanceRef.current!
@@ -286,15 +305,17 @@ export function MapComponent({
           layer.get('layerType') === 'countryMask'
         )
         if (existingBoundaryLayer) {
+          console.log('Removing existing boundary layer')
           layers.remove(existingBoundaryLayer)
         }
         if (existingMaskLayer) {
+          console.log('Removing existing mask layer')
           layers.remove(existingMaskLayer)
         }
         
         // Use the actual GeoJSON data from the uploaded shapefile
         const geojsonData = countryBoundary.geojsonData
-        console.log('GeoJSON data for boundary:', geojsonData)
+        console.log('Processing GeoJSON data with', geojsonData.features?.length, 'features')
         
         if (!geojsonData || !geojsonData.features || geojsonData.features.length === 0) {
           console.error('Invalid GeoJSON data:', geojsonData)
@@ -309,7 +330,13 @@ export function MapComponent({
           })
         })
         
-        console.log('Created boundary source with features:', boundarySource.getFeatures().length)
+        const featuresLoaded = boundarySource.getFeatures().length
+        console.log('Created boundary source with features:', featuresLoaded)
+        
+        if (featuresLoaded === 0) {
+          console.error('No features were loaded into the vector source')
+          return
+        }
         
         const boundaryLayer = new VectorLayer({
           source: boundarySource,
@@ -332,10 +359,12 @@ export function MapComponent({
         // Add the boundary layer to the map
         map.addLayer(boundaryLayer)
         
-        console.log('Added boundary layer to map')
+        console.log('Added boundary layer to map. Total layers now:', map.getLayers().getLength())
         
         // Add hover interaction for boundary features
         const hoverAttribute = countryBoundary.hoverAttribute
+        console.log('Setting up hover interaction for attribute:', hoverAttribute)
+        
         if (hoverAttribute) {
           // Create a select interaction for hover
           import('ol/interaction/Select').then(({ default: Select }) => {
@@ -391,11 +420,13 @@ export function MapComponent({
                   tooltip.style.top = (pixel[1] - 30) + 'px'
                 }
               })
+              
+              console.log('Hover interaction setup complete')
             })
           })
         }
         
-        console.log(`Loaded boundary layer for ${country}`)
+        console.log(`Successfully loaded boundary layer for ${country}`)
         
       } catch (error) {
         console.error('Failed to load boundary layer:', error)

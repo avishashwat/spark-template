@@ -274,9 +274,17 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
       return
     }
 
+    if (!currentGeojsonData || !fileMetadata) {
+      toast.error('Missing boundary data. Please re-upload the file.')
+      return
+    }
+
     try {
+      console.log('Starting boundary upload complete process...')
+      setIsUploading(true)
       setUploadProgress(90)
 
+      // Create a simplified version without large geojson data for logging
       const boundaryFile: BoundaryFile = {
         id: `boundary_${Date.now()}_${currentFile.name}`,
         name: currentFile.name,
@@ -291,34 +299,86 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
         metadata: fileMetadata
       }
 
+      console.log('Boundary file object created:', {
+        ...boundaryFile,
+        geojsonData: currentGeojsonData ? `GeoJSON with ${currentGeojsonData.features?.length || 0} features` : 'No geojson data'
+      })
+
+      // Check GeoJSON data size to avoid KV store issues
+      const geojsonString = JSON.stringify(currentGeojsonData)
+      const geojsonSizeKB = new Blob([geojsonString]).size / 1024
+      console.log(`GeoJSON data size: ${geojsonSizeKB.toFixed(2)} KB`)
+      
+      if (geojsonSizeKB > 1000) { // If larger than 1MB
+        console.warn('Large GeoJSON data detected, this might cause storage issues')
+      }
+
       const updatedFiles = [...boundaryFiles, boundaryFile]
+      console.log('Saving to KV store with', updatedFiles.length, 'files...')
+      
+      // First test if we can save a simple version
+      const testData = {
+        id: boundaryFile.id,
+        name: boundaryFile.name,
+        country: boundaryFile.country,
+        test: true
+      }
+      
+      await window.spark.kv.set('test_boundary_save', testData)
+      console.log('Test save successful')
+      
+      // Now try to save the full data
       await window.spark.kv.set('admin_boundary_files', updatedFiles)
       
-      console.log('Saved boundary file:', boundaryFile)
-      console.log('Total boundary files now:', updatedFiles.length)
+      console.log('Successfully saved to KV store')
+      
+      // Verify the save by reading it back
+      const savedFiles = await window.spark.kv.get<BoundaryFile[]>('admin_boundary_files')
+      console.log('Verification: Read back', savedFiles?.length, 'files from KV store')
+      
+      const savedFile = savedFiles?.find(f => f.id === boundaryFile.id)
+      if (savedFile) {
+        console.log('Verification: Found saved file with geojson features:', savedFile.geojsonData?.features?.length || 0)
+      } else {
+        console.error('Verification: File not found after save!')
+      }
       
       setBoundaryFiles(updatedFiles)
       setUploadProgress(100)
       
+      console.log('Calling onStatsUpdate...')
       onStatsUpdate()
+      
       toast.success('Boundary file uploaded successfully')
       
       // Reset form immediately after successful save
-      setCurrentFile(null)
-      setShowConfiguration(false)
-      setShapefileAttributes([])
-      setHoverAttribute('')
-      setFileMetadata(null)
-      setCurrentGeojsonData(null)
-      setIsUploading(false)
-      setUploadProgress(0)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
+      setTimeout(() => {
+        setCurrentFile(null)
+        setShowConfiguration(false)
+        setShapefileAttributes([])
+        setHoverAttribute('')
+        setFileMetadata(null)
+        setCurrentGeojsonData(null)
+        setIsUploading(false)
+        setUploadProgress(0)
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+      }, 1000)
 
     } catch (error) {
-      console.error('Upload error:', error)
-      toast.error('Failed to upload boundary file')
+      console.error('Upload error details:', error)
+      console.error('Error stack:', error.stack)
+      
+      // More detailed error reporting
+      if (error.message.includes('storage') || error.message.includes('quota')) {
+        toast.error('Storage quota exceeded. GeoJSON data may be too large.')
+      } else if (error.message.includes('serializ')) {
+        toast.error('Data serialization failed. Invalid GeoJSON format.')
+      } else {
+        toast.error(`Failed to upload boundary file: ${error.message || 'Unknown error'}`)
+      }
+      
       setIsUploading(false)
       setUploadProgress(0)
     }
@@ -452,6 +512,46 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
               Upload a zipped shapefile containing .shp, .shx, .dbf, and .prj files
             </p>
           </div>
+
+          {/* Debug section for development */}
+          <div className="pt-4 border-t">
+            <div className="flex space-x-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={async () => {
+                  try {
+                    const data = await window.spark.kv.get<any[]>('admin_boundary_files')
+                    console.log('Current boundary files:', data)
+                    toast.success(`Found ${data?.length || 0} boundary files in storage`)
+                  } catch (error) {
+                    console.error('Debug check failed:', error)
+                    toast.error('Failed to check storage')
+                  }
+                }}
+              >
+                Check Storage
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await window.spark.kv.delete('admin_boundary_files')
+                    await window.spark.kv.delete('test_boundary_save')
+                    setBoundaryFiles([])
+                    onStatsUpdate()
+                    toast.success('Cleared all boundary data')
+                  } catch (error) {
+                    console.error('Clear failed:', error)
+                    toast.error('Failed to clear data')
+                  }
+                }}
+              >
+                Clear All Data
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -526,11 +626,22 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
               <Button variant="outline" onClick={() => setShowConfiguration(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleUploadComplete} disabled={!hoverAttribute}>
+              <Button onClick={handleUploadComplete} disabled={!hoverAttribute || isUploading}>
                 <UploadSimple size={16} className="mr-2" />
-                Complete Upload
+                {isUploading ? 'Uploading...' : 'Complete Upload'}
               </Button>
             </div>
+            
+            {/* Progress for final upload step */}
+            {isUploading && uploadProgress > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
+                  <span>Uploading boundary data...</span>
+                  <span>{uploadProgress}%</span>
+                </div>
+                <Progress value={uploadProgress} className="w-full" />
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
