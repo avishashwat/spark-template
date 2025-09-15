@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
-import { Stack, Thermometer, Drop, Flashlight, Eye, EyeSlash } from '@phosphor-icons/react'
+import { Stack, Thermometer, Drop, Flashlight, Eye, EyeSlash, Globe } from '@phosphor-icons/react'
 
 interface LayerConfig {
   id: string
@@ -19,7 +19,16 @@ interface LayerConfig {
 interface SidebarProps {
   activeMapId: string
   onLayerChange: (mapId: string, layer: LayerConfig) => void
+  basemap: string
+  onBasemapChange: (basemap: string) => void
 }
+
+const basemaps = [
+  { id: 'osm', name: 'OpenStreetMap' },
+  { id: 'satellite', name: 'Satellite' },
+  { id: 'terrain', name: 'Terrain' },
+  { id: 'street', name: 'Street Map' }
+]
 
 const climateVariables = [
   'Maximum Temperature',
@@ -68,7 +77,7 @@ const energyInfrastructure = [
   'Wind Power Plants'
 ]
 
-export function Sidebar({ activeMapId, onLayerChange }: SidebarProps) {
+export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }: SidebarProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('')
   const [climateVariable, setClimateVariable] = useState<string>('')
   const [scenario, setScenario] = useState<string>('')
@@ -178,6 +187,28 @@ export function Sidebar({ activeMapId, onLayerChange }: SidebarProps) {
       </CardHeader>
       
       <CardContent className="space-y-6 custom-scroll overflow-y-auto max-h-[calc(100vh-140px)]">
+        {/* Basemap Selection */}
+        <div className="space-y-3">
+          <h3 className="font-medium text-sm text-foreground flex items-center gap-2">
+            <Globe className="w-4 h-4 text-primary" />
+            Basemap
+          </h3>
+          <Select value={basemap} onValueChange={onBasemapChange}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select basemap" />
+            </SelectTrigger>
+            <SelectContent>
+              {basemaps.map(map => (
+                <SelectItem key={map.id} value={map.id}>
+                  {map.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Separator />
+
         {/* Category Selection */}
         <div className="space-y-3">
           <h3 className="font-medium text-sm text-foreground">Data Category</h3>

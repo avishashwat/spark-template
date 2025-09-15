@@ -17,6 +17,7 @@ function App() {
   const [mapLayout, setMapLayout] = useState(1)
   const [showDashboard, setShowDashboard] = useState(false)
   const [activeMapId, setActiveMapId] = useState('map-1')
+  const [basemap, setBasemap] = useState('osm')
   const [sharedView, setSharedView] = useState<{ center: [number, number], zoom: number }>({
     center: [90.433601, 27.514162], // Bhutan center
     zoom: 6
@@ -54,6 +55,10 @@ function App() {
     console.log('Layer change for map:', mapId, layer)
   }, [])
 
+  const handleBasemapChange = useCallback((newBasemap: string) => {
+    setBasemap(newBasemap)
+  }, [])
+
   const renderMaps = () => {
     const maps: React.ReactElement[] = []
     const mapIds = Array.from({ length: mapLayout }, (_, i) => `map-${i + 1}`)
@@ -70,6 +75,7 @@ function App() {
             zoom={sharedView.zoom}
             onViewChange={handleViewChange}
             country={selectedCountry}
+            basemap={basemap}
           />
         </div>
       )
@@ -108,6 +114,8 @@ function App() {
           <Sidebar
             activeMapId={activeMapId}
             onLayerChange={handleLayerChange}
+            basemap={basemap}
+            onBasemapChange={handleBasemapChange}
           />
         </div>
         
