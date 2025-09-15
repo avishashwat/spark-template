@@ -19,6 +19,7 @@ interface BoundaryFile {
   hoverAttribute: string
   uploadedAt: number
   filePath: string
+  geojsonData?: any // Store the actual GeoJSON data
   metadata?: {
     featureCount: number
     bounds: [number, number, number, number] // [minX, minY, maxX, maxY]
@@ -41,6 +42,7 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
   const [hoverAttribute, setHoverAttribute] = useState('')
   const [showConfiguration, setShowConfiguration] = useState(false)
   const [fileMetadata, setFileMetadata] = useState<any>(null)
+  const [currentGeojsonData, setCurrentGeojsonData] = useState<any>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const countries = [
@@ -69,33 +71,101 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
     }
   }
 
-  // Simulate shapefile analysis
+  // Analyze shapefile from zip file
   const analyzeShapefileForBoundary = async (file: File) => {
-    return new Promise<{ attributes: string[]; metadata: any }>((resolve) => {
-      setTimeout(() => {
-        // Common boundary shapefile attributes
-        const commonAttributes = [
-          'NAME', 'NAME_EN', 'NAME_LOCAL', 'ADM1_NAME', 'ADM2_NAME', 'PROVINCE', 'DISTRICT',
-          'STATE_NAME', 'REGION', 'AREA', 'POPULATION', 'ISO_CODE', 'ADM_CODE', 'ID'
-        ]
-        
-        // Randomly select 4-8 attributes to simulate real shapefile
-        const shuffled = commonAttributes.sort(() => 0.5 - Math.random())
-        const selectedAttributes = shuffled.slice(0, 4 + Math.floor(Math.random() * 5))
-        
-        const metadata = {
-          featureCount: 10 + Math.floor(Math.random() * 50),
-          bounds: [
-            88.0 + Math.random() * 4, // minX (longitude)
-            26.0 + Math.random() * 4, // minY (latitude)
-            92.0 + Math.random() * 4, // maxX (longitude)
-            30.0 + Math.random() * 4  // maxY (latitude)
-          ] as [number, number, number, number],
-          projection: 'EPSG:4326'
+    return new Promise<{ attributes: string[]; metadata: any; geojsonData: any }>((resolve, reject) => {
+      const reader = new FileReader()
+      
+      reader.onload = async function(e) {
+        try {
+          const arrayBuffer = e.target?.result as ArrayBuffer
+          
+          // Use JSZip to extract the zip file
+          const JSZip = await import('jszip').then(m => m.default)
+          const zip = new JSZip()
+          const contents = await zip.loadAsync(arrayBuffer)
+          
+          // Find .shp, .dbf, .shx files
+          let shpFile, dbfFile, shxFile
+          
+          for (const [filename, zipFile] of Object.entries(contents.files)) {
+            if (filename.endsWith('.shp')) {
+              shpFile = await zipFile.async('arraybuffer')
+            } else if (filename.endsWith('.dbf')) {
+              dbfFile = await zipFile.async('arraybuffer')
+            } else if (filename.endsWith('.shx')) {
+              shxFile = await zipFile.async('arraybuffer')
+            }
+          }
+          
+          if (!shpFile || !dbfFile) {
+            throw new Error('Invalid shapefile: missing .shp or .dbf files')
+          }
+          
+          // Use shpjs library to parse shapefile
+          const shpjs = await import('shpjs').then(m => m.default)
+          
+          // Parse shapefile to GeoJSON
+          const geojson = await shpjs.combine([
+            shpjs.parseShp(shpFile),
+            shpjs.parseDbf(dbfFile)
+          ])
+          
+          if (!geojson || !geojson.features || geojson.features.length === 0) {
+            throw new Error('No features found in shapefile')
+          }
+          
+          // Extract attributes from first feature
+          const firstFeature = geojson.features[0]
+          const attributes = Object.keys(firstFeature.properties || {})
+          
+          // Calculate bounds
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+          
+          geojson.features.forEach((feature: any) => {
+            if (feature.geometry && feature.geometry.coordinates) {
+              const coords = feature.geometry.coordinates
+              
+              const processCoords = (coordArray: any) => {
+                if (Array.isArray(coordArray[0])) {
+                  coordArray.forEach(processCoords)
+                } else {
+                  const [x, y] = coordArray
+                  minX = Math.min(minX, x)
+                  maxX = Math.max(maxX, x)
+                  minY = Math.min(minY, y)
+                  maxY = Math.max(maxY, y)
+                }
+              }
+              
+              if (feature.geometry.type === 'Polygon') {
+                coords.forEach(processCoords)
+              } else if (feature.geometry.type === 'MultiPolygon') {
+                coords.forEach((polygon: any) => polygon.forEach(processCoords))
+              }
+            }
+          })
+          
+          const metadata = {
+            featureCount: geojson.features.length,
+            bounds: [minX, minY, maxX, maxY] as [number, number, number, number],
+            projection: 'EPSG:4326'
+          }
+          
+          resolve({ 
+            attributes, 
+            metadata,
+            geojsonData: geojson
+          })
+          
+        } catch (error) {
+          console.error('Error analyzing shapefile:', error)
+          reject(error)
         }
-        
-        resolve({ attributes: selectedAttributes, metadata })
-      }, 1200)
+      }
+      
+      reader.onerror = () => reject(new Error('Failed to read file'))
+      reader.readAsArrayBuffer(file)
     })
   }
 
@@ -122,6 +192,7 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
       const analysis = await analyzeShapefileForBoundary(file)
       setShapefileAttributes(analysis.attributes)
       setFileMetadata(analysis.metadata)
+      setCurrentGeojsonData(analysis.geojsonData)
       setUploadProgress(70)
       setShowConfiguration(true)
       
@@ -164,6 +235,7 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
         hoverAttribute: hoverAttribute,
         uploadedAt: Date.now(),
         filePath: `/boundaries/${selectedCountry}/adm${adminLevel}/${currentFile.name}`,
+        geojsonData: currentGeojsonData,
         metadata: fileMetadata
       }
 
@@ -182,6 +254,7 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
       setShapefileAttributes([])
       setHoverAttribute('')
       setFileMetadata(null)
+      setCurrentGeojsonData(null)
       setIsUploading(false)
       setUploadProgress(0)
       if (fileInputRef.current) {

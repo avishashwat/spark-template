@@ -268,7 +268,7 @@ export function MapComponent({
         // Find boundary file for current country
         const countryBoundary = boundaryFiles.find(file => file.country === country)
         
-        if (!countryBoundary) {
+        if (!countryBoundary || !countryBoundary.geojsonData) {
           console.log(`No boundary file found for country: ${country}`)
           return
         }
@@ -289,30 +289,12 @@ export function MapComponent({
           layers.remove(existingMaskLayer)
         }
         
-        // Create a simple GeoJSON feature for the boundary (mock data since we can't actually load the shapefile)
-        // In a real implementation, you would convert the shapefile to GeoJSON on the server
-        const mockBoundaryGeoJSON = {
-          type: 'FeatureCollection',
-          features: [
-            {
-              type: 'Feature',
-              properties: {
-                [countryBoundary.hoverAttribute]: `${country.charAt(0).toUpperCase() + country.slice(1)} Boundary`
-              },
-              geometry: {
-                type: 'Polygon',
-                coordinates: [[
-                  // Create a rough boundary polygon for the country based on bounds
-                  ...generateCountryBoundaryCoordinates(country)
-                ]]
-              }
-            }
-          ]
-        }
+        // Use the actual GeoJSON data from the uploaded shapefile
+        const geojsonData = countryBoundary.geojsonData
         
         // Create vector source and layer
         const boundarySource = new VectorSource({
-          features: new GeoJSON().readFeatures(mockBoundaryGeoJSON, {
+          features: new GeoJSON().readFeatures(geojsonData, {
             featureProjection: 'EPSG:4326'
           })
         })
@@ -322,7 +304,7 @@ export function MapComponent({
           style: new Style({
             stroke: new Stroke({
               color: '#000000',
-              width: 3
+              width: 2
             }),
             fill: new Fill({
               color: 'rgba(255, 255, 255, 0)' // Transparent fill to show basemap
@@ -331,58 +313,138 @@ export function MapComponent({
         })
         
         // Create an inverse mask layer to grey out areas outside the boundary
-        const worldBounds = [-180, -85, 180, 85] // World extent
-        const maskGeoJSON = {
-          type: 'FeatureCollection',
-          features: [
-            {
-              type: 'Feature',
-              properties: {},
-              geometry: {
-                type: 'Polygon',
-                coordinates: [
-                  [
-                    [worldBounds[0], worldBounds[1]], // SW
-                    [worldBounds[2], worldBounds[1]], // SE
-                    [worldBounds[2], worldBounds[3]], // NE
-                    [worldBounds[0], worldBounds[3]], // NW
-                    [worldBounds[0], worldBounds[1]]  // Close
-                  ],
-                  // Hole (country boundary) - reverse winding order
-                  generateCountryBoundaryCoordinates(country).reverse()
-                ]
+        // First, get the union of all features to create the hole
+        const allFeatures = boundarySource.getFeatures()
+        if (allFeatures.length > 0) {
+          // Get the bounding box of all features for the mask
+          const extent = boundarySource.getExtent()
+          const [minX, minY, maxX, maxY] = extent
+          
+          // Expand the world bounds to ensure full coverage
+          const worldBounds = [-180, -85, 180, 85]
+          
+          // Create a simple mask using the bounds (for performance)
+          // In a production environment, you might want to create a proper polygon union
+          const maskGeoJSON = {
+            type: 'FeatureCollection',
+            features: [
+              {
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                  type: 'Polygon',
+                  coordinates: [
+                    [
+                      [worldBounds[0], worldBounds[1]], // SW
+                      [worldBounds[2], worldBounds[1]], // SE
+                      [worldBounds[2], worldBounds[3]], // NE
+                      [worldBounds[0], worldBounds[3]], // NW
+                      [worldBounds[0], worldBounds[1]]  // Close
+                    ],
+                    // Hole (approximate country boundary using extent)
+                    [
+                      [minX - 0.1, minY - 0.1],
+                      [maxX + 0.1, minY - 0.1],
+                      [maxX + 0.1, maxY + 0.1],
+                      [minX - 0.1, maxY + 0.1],
+                      [minX - 0.1, minY - 0.1]
+                    ].reverse() // Reverse for hole
+                  ]
+                }
               }
-            }
-          ]
-        }
-        
-        const maskSource = new VectorSource({
-          features: new GeoJSON().readFeatures(maskGeoJSON, {
-            featureProjection: 'EPSG:4326'
-          })
-        })
-        
-        const maskLayer = new VectorLayer({
-          source: maskSource,
-          style: new Style({
-            fill: new Fill({
-              color: 'rgba(128, 128, 128, 0.3)' // Semi-transparent grey overlay
+            ]
+          }
+          
+          const maskSource = new VectorSource({
+            features: new GeoJSON().readFeatures(maskGeoJSON, {
+              featureProjection: 'EPSG:4326'
             })
           })
-        })
-        
-        // Set layer properties for identification
-        maskLayer.set('layerType', 'countryMask')
-        maskLayer.set('countryCode', country)
+          
+          const maskLayer = new VectorLayer({
+            source: maskSource,
+            style: new Style({
+              fill: new Fill({
+                color: 'rgba(128, 128, 128, 0.3)' // Semi-transparent grey overlay
+              })
+            })
+          })
+          
+          // Set layer properties for identification
+          maskLayer.set('layerType', 'countryMask')
+          maskLayer.set('countryCode', country)
+          
+          // Add mask layer first (below boundary)
+          layers.insertAt(layers.getLength(), maskLayer)
+        }
         
         // Set layer properties for identification
         boundaryLayer.set('layerType', 'boundary')
         boundaryLayer.set('countryCode', country)
         
-        // Add mask layer first (below boundary)
-        layers.insertAt(layers.getLength(), maskLayer)
         // Add boundary layer on top
         layers.insertAt(layers.getLength(), boundaryLayer)
+        
+        // Add hover interaction for boundary features
+        const hoverAttribute = countryBoundary.hoverAttribute
+        if (hoverAttribute) {
+          // Create a select interaction for hover
+          import('ol/interaction/Select').then(({ default: Select }) => {
+            import('ol/events/condition').then(({ pointerMove }) => {
+              const selectInteraction = new Select({
+                condition: pointerMove,
+                layers: [boundaryLayer],
+                style: new Style({
+                  stroke: new Stroke({
+                    color: '#0072bc',
+                    width: 3
+                  }),
+                  fill: new Fill({
+                    color: 'rgba(0, 114, 188, 0.1)'
+                  })
+                })
+              })
+              
+              map.addInteraction(selectInteraction)
+              
+              // Create a div for tooltip
+              const tooltip = document.createElement('div')
+              tooltip.className = 'ol-tooltip hidden'
+              tooltip.style.cssText = `
+                position: absolute;
+                background: rgba(0,0,0,0.8);
+                color: white;
+                padding: 4px 8px;
+                border-radius: 3px;
+                font-size: 12px;
+                pointer-events: none;
+                z-index: 1000;
+              `
+              map.getViewport().appendChild(tooltip)
+              
+              selectInteraction.on('select', (e) => {
+                if (e.selected.length > 0) {
+                  const feature = e.selected[0]
+                  const properties = feature.getProperties()
+                  const name = properties[hoverAttribute] || 'Unknown'
+                  tooltip.innerHTML = name
+                  tooltip.classList.remove('hidden')
+                } else {
+                  tooltip.classList.add('hidden')
+                }
+              })
+              
+              // Update tooltip position on pointer move
+              map.on('pointermove', (evt) => {
+                if (!tooltip.classList.contains('hidden')) {
+                  const pixel = map.getEventPixel(evt.originalEvent)
+                  tooltip.style.left = (pixel[0] + 10) + 'px'
+                  tooltip.style.top = (pixel[1] - 30) + 'px'
+                }
+              })
+            })
+          })
+        }
         
         console.log(`Loaded boundary layer for ${country}`)
         
@@ -393,39 +455,6 @@ export function MapComponent({
     
     loadBoundaryLayer()
   }, [country]) // Re-run when country changes
-
-  // Helper function to generate realistic boundary coordinates for each country
-  const generateCountryBoundaryCoordinates = (countryCode: string): number[][] => {
-    // Return actual boundary coordinates for each country (simplified)
-    switch (countryCode) {
-      case 'bhutan':
-        return [
-          [88.746, 26.702], [89.744, 26.719], [90.373, 26.985], [91.696, 27.289],
-          [92.125, 27.472], [92.033, 27.739], [91.659, 27.827], [91.108, 27.877],
-          [90.374, 28.058], [89.744, 28.239], [89.165, 28.316], [88.746, 28.152],
-          [88.120, 27.884], [88.120, 27.363], [88.746, 26.995], [88.746, 26.702]
-        ]
-      case 'mongolia':
-        return [
-          [87.75, 41.58], [90.90, 41.59], [96.38, 42.72], [102.25, 43.38], 
-          [109.25, 44.03], [115.62, 45.37], [119.92, 46.68], [119.77, 49.35],
-          [117.87, 50.95], [115.45, 51.64], [111.87, 52.15], [108.52, 52.07],
-          [103.31, 51.18], [99.51, 50.25], [96.34, 49.03], [93.45, 48.66],
-          [90.59, 48.22], [87.73, 47.05], [87.73, 44.83], [87.75, 41.58]
-        ]
-      case 'laos':
-        return [
-          [100.084, 22.504], [100.398, 21.577], [100.948, 20.415], [101.623, 19.454],
-          [102.177, 18.108], [103.200, 17.289], [104.433, 16.877], [105.329, 16.007],
-          [106.556, 15.190], [107.318, 14.202], [107.564, 13.913], [107.382, 13.534],
-          [106.496, 14.570], [105.218, 15.510], [104.281, 16.388], [103.203, 17.031],
-          [102.584, 17.638], [101.108, 19.462], [100.548, 20.109], [100.115, 21.558],
-          [100.084, 22.504]
-        ]
-      default:
-        return []
-    }
-  }
 
   const handleDownload = async () => {
     if (!mapInstanceRef.current || isDownloading) return
