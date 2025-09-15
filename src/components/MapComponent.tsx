@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { Map as OLMap, View } from 'ol'
 import TileLayer from 'ol/layer/Tile'
 import VectorLayer from 'ol/layer/Vector'
@@ -88,6 +88,36 @@ export function MapComponent({
   const [viewMode, setViewMode] = useState<'map' | 'chart' | 'table'>('map')
   const [showDropdown, setShowDropdown] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
+  
+  // Cache for boundary data to avoid repeated loading
+  const boundaryCache = useRef<Map<string, any>>(new Map())
+  const loadingPromises = useRef<Map<string, Promise<any>>>(new Map())
+  const [boundaryLoading, setBoundaryLoading] = useState(false)
+
+  // Preload all boundaries on component mount for instant switching
+  useEffect(() => {
+    const preloadBoundaries = async () => {
+      const countries = ['bhutan', 'mongolia', 'laos']
+      console.log('Preloading boundaries for all countries...')
+      
+      // Load all boundaries in parallel in the background
+      const preloadPromises = countries.map(async (country) => {
+        try {
+          await loadBoundaryData(country)
+          console.log('Preloaded boundary for:', country)
+        } catch (error) {
+          console.error('Failed to preload boundary for', country, ':', error)
+        }
+      })
+      
+      await Promise.all(preloadPromises)
+      console.log('All boundaries preloaded successfully')
+    }
+    
+    // Start preloading after a short delay to not interfere with initial load
+    const timer = setTimeout(preloadBoundaries, 1000)
+    return () => clearTimeout(timer)
+  }, [])
   
   // Only show dropdown in multi-map mode (2 or 4 maps)
   const showViewSelector = mapLayout > 1
@@ -227,20 +257,27 @@ export function MapComponent({
     
     const view = mapInstanceRef.current.getView()
     
-    // Use fitExtent for more precise fitting
+    // Use fitExtent for more precise fitting with faster animation
     view.animate({
       center: centerCoord,
       zoom: optimalZoom,
-      duration: 500,
+      duration: 300, // Reduced from 500ms for faster country switching
     })
   }, [country])
 
-  // Update basemap when changed
+  // Update basemap when changed - optimized to avoid flicker
   useEffect(() => {
     if (!mapInstanceRef.current) return
     
     const map = mapInstanceRef.current
     const layers = map.getLayers()
+    
+    // Check if basemap actually changed
+    const currentBasemap = layers.item(0)?.get('basemapType')
+    if (currentBasemap === basemap) {
+      console.log('Basemap unchanged, skipping update')
+      return
+    }
     
     // Remove existing basemap (should be the first layer)
     if (layers.getLength() > 0) {
@@ -253,36 +290,38 @@ export function MapComponent({
       source: basemapSource,
     })
     
+    // Mark basemap type for future comparison
+    basemapLayer.set('basemapType', basemap)
+    
     layers.insertAt(0, basemapLayer)
   }, [basemap])
 
-  // Load boundary layer for the current country
-  useEffect(() => {
-    if (!mapInstanceRef.current) return
+  // Optimized boundary data loading with caching
+  const loadBoundaryData = useCallback(async (country: string): Promise<any> => {
+    // Check cache first
+    if (boundaryCache.current.has(country)) {
+      console.log('Loading boundary from cache for:', country)
+      return boundaryCache.current.get(country)
+    }
     
-    const loadBoundaryLayer = async () => {
+    // Check if we're already loading this country
+    if (loadingPromises.current.has(country)) {
+      console.log('Already loading boundary for:', country, 'waiting for existing promise...')
+      return loadingPromises.current.get(country)
+    }
+    
+    // Create new loading promise
+    const loadingPromise = (async () => {
       try {
-        console.log('=== Loading boundary layer for country:', country, '===')
+        console.log('Loading boundary data for country:', country)
         
         // Get boundary files from storage
         const boundaryFiles = await window.spark.kv.get<any[]>('admin_boundary_files') || []
-        console.log('All boundary files loaded from KV:', boundaryFiles.length)
-        console.log('Boundary files details:', boundaryFiles.map(f => ({
-          id: f.id,
-          name: f.name,
-          country: f.country,
-          hasGeojson: !!f.geojsonData,
-          hasDataKey: !!f.dataKey,
-          featureCount: f.geojsonData?.features?.length || 0
-        })))
-        
-        // Find boundary file for current country
         const countryBoundary = boundaryFiles.find(file => file.country === country)
-        console.log('Found boundary for country:', country, ':', !!countryBoundary)
         
         if (!countryBoundary) {
           console.log(`No boundary file found for country: ${country}`)
-          return
+          return null
         }
         
         let geojsonData: any = null
@@ -290,46 +329,51 @@ export function MapComponent({
         // Check if we need to load from chunked storage
         if (countryBoundary.dataKey && !countryBoundary.geojsonData) {
           console.log('Loading boundary data from chunked storage:', countryBoundary.dataKey)
-          try {
-            // Function to retrieve chunked data
-            const getDataFromChunks = async (key: string): Promise<any> => {
-              const metaOrData = await window.spark.kv.get<any>(key)
+          
+          // Function to retrieve chunked data with optimized parallel loading
+          const getDataFromChunks = async (key: string): Promise<any> => {
+            const metaOrData = await window.spark.kv.get<any>(key)
+            
+            if (!metaOrData) return null
+            
+            // Check if it's chunked data
+            if (metaOrData && typeof metaOrData === 'object' && 'isChunked' in metaOrData && metaOrData.isChunked) {
+              const chunkMeta = metaOrData
+              console.log(`Loading ${chunkMeta.totalChunks} chunks in parallel for ${key}`)
               
-              if (!metaOrData) return null
-              
-              // Check if it's chunked data
-              if (metaOrData && typeof metaOrData === 'object' && 'isChunked' in metaOrData && metaOrData.isChunked) {
-                const chunkMeta = metaOrData
-                console.log(`Retrieving ${chunkMeta.totalChunks} chunks for ${key}`)
-                
-                let reconstructedData = ''
-                for (let i = 0; i < chunkMeta.totalChunks; i++) {
-                  const chunk = await window.spark.kv.get<string>(`${key}_chunk_${i}`)
-                  if (chunk) {
-                    reconstructedData += chunk
-                  } else {
-                    throw new Error(`Missing chunk ${i} for ${key}`)
-                  }
-                }
-                
-                return JSON.parse(reconstructedData)
+              // Load all chunks in parallel for faster loading
+              const chunkPromises: Promise<string | undefined>[] = []
+              for (let i = 0; i < chunkMeta.totalChunks; i++) {
+                chunkPromises.push(
+                  window.spark.kv.get<string>(`${key}_chunk_${i}`)
+                )
               }
               
-              // Return direct data if not chunked
-              return metaOrData
+              const chunks = await Promise.all(chunkPromises)
+              
+              // Verify all chunks are present
+              for (let i = 0; i < chunks.length; i++) {
+                if (!chunks[i]) {
+                  throw new Error(`Missing chunk ${i} for ${key}`)
+                }
+              }
+              
+              // Reconstruct data
+              const reconstructedData = chunks.join('')
+              return JSON.parse(reconstructedData)
             }
             
-            const fullBoundaryData = await getDataFromChunks(countryBoundary.dataKey)
-            if (fullBoundaryData && fullBoundaryData.geojsonData) {
-              geojsonData = fullBoundaryData.geojsonData
-              console.log('Successfully loaded boundary data from chunks:', geojsonData.features?.length, 'features')
-            } else {
-              console.error('Failed to load boundary data from chunks')
-              return
-            }
-          } catch (error) {
-            console.error('Error loading chunked boundary data:', error)
-            return
+            // Return direct data if not chunked
+            return metaOrData
+          }
+          
+          const fullBoundaryData = await getDataFromChunks(countryBoundary.dataKey)
+          if (fullBoundaryData && fullBoundaryData.geojsonData) {
+            geojsonData = fullBoundaryData.geojsonData
+            console.log('Successfully loaded boundary data from chunks:', geojsonData.features?.length, 'features')
+          } else {
+            console.error('Failed to load boundary data from chunks')
+            return null
           }
         } else if (countryBoundary.geojsonData) {
           // Use directly available geojson data
@@ -339,8 +383,50 @@ export function MapComponent({
         
         if (!geojsonData) {
           console.error('No boundary geojson data available for country:', country)
+          return null
+        }
+        
+        // Cache the loaded data
+        const result = {
+          geojsonData,
+          hoverAttribute: countryBoundary.hoverAttribute
+        }
+        boundaryCache.current.set(country, result)
+        
+        return result
+      } catch (error) {
+        console.error('Error loading boundary data for', country, ':', error)
+        return null
+      } finally {
+        // Clean up the loading promise
+        loadingPromises.current.delete(country)
+      }
+    })()
+    
+    // Store the promise so other calls can wait for it
+    loadingPromises.current.set(country, loadingPromise)
+    
+    return loadingPromise
+  }, [])
+
+  // Load boundary layer for the current country
+  useEffect(() => {
+    if (!mapInstanceRef.current) return
+    
+    const loadBoundaryLayer = async () => {
+      try {
+        setBoundaryLoading(true)
+        console.log('=== Loading boundary layer for country:', country, '===')
+        
+        // Use optimized loading function with caching
+        const boundaryData = await loadBoundaryData(country)
+        
+        if (!boundaryData) {
+          console.log(`No boundary data available for country: ${country}`)
           return
         }
+        
+        const { geojsonData, hoverAttribute } = boundaryData
         
         console.log('GeoJSON data structure:', {
           type: geojsonData.type,
@@ -467,14 +553,13 @@ export function MapComponent({
           console.log('Fitting view to boundary extent')
           map.getView().fit(extent, {
             padding: [20, 20, 20, 20],
-            duration: 1000
+            duration: 300 // Reduced from 1000ms for faster response
           })
         } else {
           console.error('Invalid extent for boundary:', extent)
         }
         
         // Add hover interaction for boundary features
-        const hoverAttribute = countryBoundary.hoverAttribute
         console.log('Setting up hover interaction for attribute:', hoverAttribute)
         
         if (hoverAttribute) {
@@ -548,11 +633,13 @@ export function MapComponent({
           country: country
         })
         toast.error(`Failed to load boundary for ${country}: ${error.message}`)
+      } finally {
+        setBoundaryLoading(false)
       }
     }
     
     loadBoundaryLayer()
-  }, [country]) // Re-run when country changes
+  }, [country, loadBoundaryData]) // Re-run when country changes
 
   const handleDownload = async () => {
     if (!mapInstanceRef.current || isDownloading) return
@@ -855,6 +942,16 @@ export function MapComponent({
           <>
             <div className="flex-1 relative">
               <div ref={mapRef} className="w-full h-full cursor-pointer" />
+              
+              {/* Loading indicator for boundaries */}
+              {boundaryLoading && (
+                <div className="absolute inset-0 bg-black/10 flex items-center justify-center z-50">
+                  <div className="bg-white/90 rounded-lg p-3 shadow-lg flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+                    <span className="text-sm text-foreground">Loading boundary...</span>
+                  </div>
+                </div>
+              )}
               
               {/* Legends - positioned in top-left corner, support multiple overlays with scaled sizing */}
               {allMapOverlays && allMapOverlays[id] && Object.keys(allMapOverlays[id]).length > 0 && (
