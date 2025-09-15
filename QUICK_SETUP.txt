@@ -1,0 +1,13 @@
+# Quick Setup Commands for Codespaces
+# Copy and paste these commands one by one in your terminal
+
+# Step 1: Make setup script executable
+chmod +x scripts/setup-codespaces.sh
+
+# Step 2: Run the complete setup
+./scripts/setup-codespaces.sh
+
+# Step 3: After infrastructure is ready, start your app
+npm run dev
+
+# That's it! Your high-performance geospatial platform is ready.
