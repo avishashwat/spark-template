@@ -189,11 +189,15 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
   }
 
   const renderSelectionPanel = () => {
-    if (!showSelectionPanel) return null
-
     return (
-      <div className="fixed inset-0 bg-black/20 z-50 flex items-center justify-center" onClick={() => setShowSelectionPanel(false)}>
-        <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div 
+        className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center"
+        onClick={() => setShowSelectionPanel(false)}
+      >
+        <div 
+          className="bg-white rounded-lg shadow-2xl max-w-md w-full mx-4 max-h-[80vh] overflow-hidden border-2 border-primary/20" 
+          onClick={e => e.stopPropagation()}
+        >
           <div className="flex items-center justify-between p-4 border-b">
             <h3 className="font-semibold text-base">
               {selectedCategory === 'climate' && 'Climate Variables'}
@@ -409,21 +413,21 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
           {/* Data Categories */}
           <div className="space-y-2">
             <h3 className="font-medium text-xs text-muted-foreground">DATA LAYERS</h3>
-            <div className="grid gap-1">
+            <div className="grid gap-2">
               {[
-                { id: 'climate', label: 'Climate Variables', icon: Thermometer, color: 'text-orange-500' },
-                { id: 'giri', label: 'GIRI Hazards', icon: Drop, color: 'text-blue-500' },
-                { id: 'energy', label: 'Energy Infrastructure', icon: Flashlight, color: 'text-yellow-500' }
+                { id: 'climate', label: 'Climate Variables', icon: Thermometer, color: 'text-orange-600' },
+                { id: 'giri', label: 'GIRI Hazards', icon: Drop, color: 'text-blue-600' },
+                { id: 'energy', label: 'Energy Infrastructure', icon: Flashlight, color: 'text-yellow-600' }
               ].map(({ id, label, icon: Icon, color }) => (
                 <Button
                   key={id}
-                  variant="ghost"
-                  className="justify-start h-8 text-sm px-2 hover:bg-muted/50"
+                  variant="outline"
+                  className="justify-start h-12 text-sm px-4 hover:bg-primary/10 border-2 hover:border-primary/30 transition-all duration-200"
                   onClick={() => handleCategoryChange(id)}
                 >
-                  <Icon className={`w-3 h-3 mr-2 ${color}`} />
+                  <Icon className={`w-4 h-4 mr-2 ${color}`} />
                   {label}
-                  <Plus className="w-3 h-3 ml-auto text-muted-foreground" />
+                  <Plus className="w-4 h-4 ml-auto text-muted-foreground" />
                 </Button>
               ))}
             </div>
@@ -491,8 +495,8 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
         </CardContent>
       </Card>
       
-      {/* Floating Selection Panel */}
-      {renderSelectionPanel()}
+      {/* Floating Selection Panel - Direct render without portal */}
+      {showSelectionPanel && selectedCategory && renderSelectionPanel()}
     </>
   )
 }

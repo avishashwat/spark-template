@@ -132,11 +132,9 @@ export function MapComponent({
           className: 'ol-zoom',
         }),
         new ScaleLine({
-          className: 'ol-scale-line-simple',
           bar: true,
           text: true,
-          minWidth: 64,
-          maxWidth: 100,
+          minWidth: 50,
         }),
       ]),
     })
