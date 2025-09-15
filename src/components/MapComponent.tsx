@@ -723,15 +723,7 @@ export function MapComponent({
               const clickInteraction = new Select({
                 condition: click,
                 layers: [boundaryLayer],
-                style: new Style({
-                  stroke: new Stroke({
-                    color: '#dc382d',
-                    width: 3
-                  }),
-                  fill: new Fill({
-                    color: 'rgba(220, 56, 45, 0.2)'
-                  })
-                })
+                style: null // No persistent styling on click
               })
               
               map.addInteraction(hoverInteraction)
@@ -861,7 +853,7 @@ export function MapComponent({
                             provinceMaskLayer.set('layerType', 'provinceMask')
                             layers.insertAt(layers.getLength(), provinceMaskLayer)
                             
-                            // Add the province feature itself with NO fill (completely transparent)
+                            // Add the province feature itself with completely transparent fill
                             const provinceLayer = new VectorLayer({
                               source: new VectorSource({
                                 features: [feature.clone()]
@@ -870,8 +862,10 @@ export function MapComponent({
                                 stroke: new Stroke({
                                   color: '#0072bc',
                                   width: 2
+                                }),
+                                fill: new Fill({
+                                  color: 'rgba(0, 0, 0, 0)'  // Completely transparent fill
                                 })
-                                // NO fill at all - completely opaque area shows through
                               }),
                               zIndex: 999  // Higher z-index to appear above mask
                             })
@@ -898,6 +892,9 @@ export function MapComponent({
                     })
                     
                     toast.success(`Zoomed to ${provinceName}`)
+                    
+                    // Clear the click selection immediately to prevent persistent styling
+                    clickInteraction.getFeatures().clear()
                   }
                 }
               })
@@ -1185,6 +1182,24 @@ export function MapComponent({
         }
       }
     })
+    
+    // Force refresh of boundary layer to remove any persistent styling
+    const boundaryLayer = layers.getArray().find(layer => 
+      layer.get('layerType') === 'boundary'
+    )
+    if (boundaryLayer) {
+      // Reset the style of all features in the boundary layer
+      const vectorLayer = boundaryLayer as VectorLayer<VectorSource>
+      const source = vectorLayer.getSource()
+      if (source) {
+        const features = source.getFeatures()
+        features.forEach(feature => {
+          feature.setStyle(undefined) // Reset to default layer style
+        })
+      }
+      // Force layer refresh
+      vectorLayer.changed()
+    }
     
     // Restore country view
     map.getView().animate({
