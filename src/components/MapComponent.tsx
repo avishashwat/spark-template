@@ -514,34 +514,63 @@ export function MapComponent({
         
         if (boundaryFeatures.length > 0) {
           try {
-            // Create a unified geometry from all boundary features
-            // We need to be smart about handling holes vs separate administrative units
-            let allExteriorRings: number[][][] = []
+            // For Mongolia and other countries with administrative subdivisions,
+            // we need to create a union of all polygons rather than treating each as separate holes
+            
+            // Import turf for geometric operations
+            const { union } = await import('@turf/union')
+            const { polygon, multiPolygon, featureCollection } = await import('@turf/helpers')
+            
+            // Convert all boundary features to turf polygons
+            const turfPolygons: any[] = []
             
             boundaryFeatures.forEach(feature => {
               const geom = feature.getGeometry()
               
               if (geom?.getType() === 'Polygon') {
                 const coords = (geom as Polygon).getCoordinates()
-                // Only add the exterior ring - interior rings are actual holes within the admin unit
                 if (coords && coords.length > 0) {
-                  allExteriorRings.push(coords[0])
+                  turfPolygons.push(polygon(coords))
                 }
               } else if (geom?.getType() === 'MultiPolygon') {
                 const coords = (geom as MultiPolygon).getCoordinates()
-                coords.forEach((polygon: number[][][]) => {
-                  // For each polygon in the multipolygon, only add the exterior ring
-                  // Each separate polygon represents a different part of the country (like islands)
-                  if (polygon && polygon.length > 0) {
-                    allExteriorRings.push(polygon[0])
-                  }
-                })
+                turfPolygons.push(multiPolygon(coords))
               }
             })
             
-            console.log('Created unified boundary with', allExteriorRings.length, 'exterior rings')
+            console.log('Converting', turfPolygons.length, 'boundary features to unified geometry')
             
-            // Create the world polygon with holes for all administrative boundary exterior rings
+            // Create a union of all administrative boundaries
+            let unifiedBoundary = turfPolygons[0]
+            for (let i = 1; i < turfPolygons.length; i++) {
+              try {
+                unifiedBoundary = union(featureCollection([unifiedBoundary, turfPolygons[i]]))
+              } catch (unionError) {
+                console.warn('Union operation failed for feature', i, ':', unionError)
+                // Continue with current unified boundary
+              }
+            }
+            
+            // Extract coordinates from the unified boundary
+            let allExteriorRings: number[][][] = []
+            
+            if (unifiedBoundary && unifiedBoundary.geometry) {
+              if (unifiedBoundary.geometry.type === 'Polygon') {
+                // Single polygon - add exterior ring only
+                allExteriorRings.push(unifiedBoundary.geometry.coordinates[0])
+              } else if (unifiedBoundary.geometry.type === 'MultiPolygon') {
+                // Multiple polygons - add each exterior ring
+                unifiedBoundary.geometry.coordinates.forEach((polygon: number[][][]) => {
+                  if (polygon && polygon.length > 0) {
+                    allExteriorRings.push(polygon[0]) // Only exterior ring
+                  }
+                })
+              }
+            }
+            
+            console.log('Created unified boundary with', allExteriorRings.length, 'exterior rings after union operation')
+            
+            // Create the world polygon with holes for unified boundary exterior rings
             const maskGeometry = {
               type: "Polygon",
               coordinates: [[
@@ -550,7 +579,7 @@ export function MapComponent({
                 [worldExtent[2], worldExtent[3]], // top-right
                 [worldExtent[0], worldExtent[3]], // top-left
                 [worldExtent[0], worldExtent[1]]  // close polygon
-              ], ...allExteriorRings] // Add all exterior rings as holes in the world mask
+              ], ...allExteriorRings] // Add unified boundary rings as holes in the world mask
             }
             
             // Create mask source and layer
