@@ -861,7 +861,7 @@ export function MapComponent({
                             provinceMaskLayer.set('layerType', 'provinceMask')
                             layers.insertAt(layers.getLength(), provinceMaskLayer)
                             
-                            // Add the province feature itself with transparent fill (opaque background)
+                            // Add the province feature itself with NO fill (completely transparent)
                             const provinceLayer = new VectorLayer({
                               source: new VectorSource({
                                 features: [feature.clone()]
@@ -870,10 +870,8 @@ export function MapComponent({
                                 stroke: new Stroke({
                                   color: '#0072bc',
                                   width: 2
-                                }),
-                                fill: new Fill({
-                                  color: 'rgba(0, 0, 0, 0)'  // Completely transparent fill - shows underlying map opaquely
                                 })
+                                // NO fill at all - completely opaque area shows through
                               }),
                               zIndex: 999  // Higher z-index to appear above mask
                             })
@@ -1176,6 +1174,18 @@ export function MapComponent({
       layers.remove(selectedProvinceLayer)
     }
     
+    // Clear all selection interactions to remove any persistent styling
+    const interactions = map.getInteractions().getArray()
+    interactions.forEach(interaction => {
+      if (interaction.constructor.name === 'Select') {
+        // Clear the selection of the Select interaction
+        const selectInteraction = interaction as any
+        if (selectInteraction.getFeatures) {
+          selectInteraction.getFeatures().clear()
+        }
+      }
+    })
+    
     // Restore country view
     map.getView().animate({
       center: countryView.center,
@@ -1192,6 +1202,20 @@ export function MapComponent({
 
   // Reset province view when country changes
   useEffect(() => {
+    // Clear any selection interactions when country changes
+    if (mapInstanceRef.current) {
+      const map = mapInstanceRef.current
+      const interactions = map.getInteractions().getArray()
+      interactions.forEach(interaction => {
+        if (interaction.constructor.name === 'Select') {
+          const selectInteraction = interaction as any
+          if (selectInteraction.getFeatures) {
+            selectInteraction.getFeatures().clear()
+          }
+        }
+      })
+    }
+    
     setIsProvinceView(false)
     setSelectedProvince(null)
     setCountryView(null)
