@@ -227,225 +227,217 @@ export function MapComponent({
     const map = mapInstanceRef.current
     
     try {
-      // Wait for all layers to render completely
-      map.once('rendercomplete', () => {
-        setTimeout(() => { // Small delay to ensure rendering is complete
-          try {
-            const mapCanvas = document.createElement('canvas')
-            const size = map.getSize()
-            if (!size) {
-              console.error('Could not get map size')
-              // Fallback: Create information card instead
-              createFallbackDownload()
-              return
-            }
-            
-            mapCanvas.width = size[0]
-            mapCanvas.height = size[1]
-            const mapContext = mapCanvas.getContext('2d')
-            if (!mapContext) {
-              console.error('Could not get canvas context')
-              createFallbackDownload()
-              return
-            }
-            
-            // Set a white background
-            mapContext.fillStyle = '#ffffff'
-            mapContext.fillRect(0, 0, mapCanvas.width, mapCanvas.height)
-            
-            let hasDrawnAnyCanvas = false
-            
-            // Try to draw each canvas layer
-            Array.prototype.forEach.call(
-              map.getViewport().querySelectorAll('.ol-layer canvas, canvas.ol-layer'),
-              (canvas: HTMLCanvasElement) => {
-                if (canvas.width > 0 && canvas.height > 0) {
-                  try {
-                    const opacity = canvas.parentElement?.style.opacity || canvas.style.opacity
-                    mapContext.globalAlpha = opacity === '' ? 1 : Number(opacity)
-                    
-                    // Reset transform
-                    mapContext.setTransform(1, 0, 0, 1, 0, 0)
-                    
-                    // Get transform from canvas style
-                    const transform = canvas.style.transform
-                    if (transform && transform !== 'none') {
-                      const matrix = transform
-                        .match(/^matrix\(([^\)]*)\)$/)?.[1]
-                        ?.split(',')
-                        ?.map(Number)
-                      
-                      if (matrix && matrix.length === 6) {
-                        mapContext.setTransform(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5])
-                      }
-                    }
-                    
-                    mapContext.drawImage(canvas, 0, 0)
-                    hasDrawnAnyCanvas = true
-                    
-                    // Reset transform and alpha
-                    mapContext.setTransform(1, 0, 0, 1, 0, 0)
-                    mapContext.globalAlpha = 1
-                  } catch (e) {
-                    console.warn('Could not draw canvas layer (likely CORS restriction):', e)
-                  }
-                }
-              }
-            )
-            
-            // If no canvas was drawn (CORS issues), create a fallback image
-            if (!hasDrawnAnyCanvas) {
-              console.warn('No canvas layers could be drawn, creating fallback image')
-              
-              // Create a styled fallback
-              mapContext.fillStyle = '#f8f9fa'
-              mapContext.fillRect(0, 0, mapCanvas.width, mapCanvas.height)
-              
-              // Add border
-              mapContext.strokeStyle = '#e5e7eb'
-              mapContext.lineWidth = 2
-              mapContext.strokeRect(1, 1, mapCanvas.width - 2, mapCanvas.height - 2)
-              
-              // Add title
-              mapContext.fillStyle = '#1a1a1a'
-              mapContext.font = 'bold 24px Inter'
-              mapContext.textAlign = 'center'
-              mapContext.fillText(`Map of ${country.charAt(0).toUpperCase() + country.slice(1)}`, mapCanvas.width / 2, mapCanvas.height / 2 - 40)
-              
-              // Add overlay info
-              if (overlayInfo) {
-                mapContext.font = '18px Inter'
-                mapContext.fillStyle = '#0072bc'
-                mapContext.fillText(overlayInfo.name, mapCanvas.width / 2, mapCanvas.height / 2)
-                
-                if (overlayInfo.scenario) {
-                  mapContext.font = '14px Inter'
-                  mapContext.fillStyle = '#666'
-                  mapContext.fillText(`Scenario: ${overlayInfo.scenario}`, mapCanvas.width / 2, mapCanvas.height / 2 + 25)
-                }
-                
-                if (overlayInfo.year) {
-                  mapContext.fillText(`Year: ${overlayInfo.year}`, mapCanvas.width / 2, mapCanvas.height / 2 + 45)
-                }
-                
-                if (overlayInfo.season) {
-                  mapContext.fillText(`Season: ${overlayInfo.season}`, mapCanvas.width / 2, mapCanvas.height / 2 + 65)
-                }
-              } else {
-                mapContext.font = '16px Inter'
-                mapContext.fillStyle = '#666'
-                mapContext.fillText('No overlay selected', mapCanvas.width / 2, mapCanvas.height / 2 + 10)
-              }
-              
-              // Add note about CORS
-              mapContext.font = '12px Inter'
-              mapContext.fillStyle = '#999'
-              mapContext.fillText('(Map tiles could not be exported due to CORS restrictions)', mapCanvas.width / 2, mapCanvas.height - 30)
-            }
-            
-            // Add metadata overlay
-            mapContext.fillStyle = 'rgba(255, 255, 255, 0.95)'
-            mapContext.fillRect(10, 10, 200, 80)
-            mapContext.strokeStyle = '#e5e7eb'
-            mapContext.lineWidth = 1
-            mapContext.strokeRect(10, 10, 200, 80)
-            
-            mapContext.fillStyle = '#1a1a1a'
-            mapContext.font = 'bold 12px Inter'
-            mapContext.textAlign = 'left'
-            mapContext.fillText('UN ESCAP Climate & Energy', 15, 25)
-            mapContext.fillText('Risk Visualization', 15, 40)
-            
-            mapContext.font = '10px Inter'
-            mapContext.fillStyle = '#666'
-            const view = map.getView()
-            const center = view.getCenter()
-            const zoom = view.getZoom()
-            if (center && zoom) {
-              mapContext.fillText(`Center: ${center[1].toFixed(3)}, ${center[0].toFixed(3)}`, 15, 55)
-              mapContext.fillText(`Zoom: ${zoom.toFixed(1)}`, 15, 70)
-              mapContext.fillText(`Generated: ${new Date().toISOString().split('T')[0]}`, 15, 85)
-            }
-            
-            // Download the image
-            const link = document.createElement('a')
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0]
-            const overlayName = overlayInfo?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'no_overlay'
-            link.download = `map_${country}_${overlayName}_${timestamp}.png`
-            link.href = mapCanvas.toDataURL('image/png', 1.0)
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
-            
-            console.log('Map downloaded successfully')
-            toast.success('Map downloaded successfully!')
-            setIsDownloading(false)
-            
-          } catch (error) {
-            console.error('Error creating map image:', error)
-            // Fallback to text-based download
-            createFallbackDownload()
-          }
-        }, 100) // Small delay to ensure rendering is complete
-      })
+      // Use html2canvas approach for more reliable screenshot
+      const mapContainer = map.getViewport()
       
-      // Force a render to trigger the event
-      map.renderSync()
+      // Create canvas from map viewport
+      const canvas = document.createElement('canvas')
+      const size = map.getSize()
+      
+      if (!size) {
+        console.error('Could not get map size')
+        createFallbackDownload()
+        return
+      }
+      
+      canvas.width = size[0]
+      canvas.height = size[1]
+      const context = canvas.getContext('2d')
+      
+      if (!context) {
+        console.error('Could not get canvas context')
+        createFallbackDownload()
+        return
+      }
+      
+      // Set white background
+      context.fillStyle = '#ffffff'
+      context.fillRect(0, 0, canvas.width, canvas.height)
+      
+      // Simple approach: try to capture map canvas elements
+      let mapCaptured = false
+      const canvasElements = mapContainer.querySelectorAll('canvas')
+      
+      if (canvasElements.length > 0) {
+        canvasElements.forEach((canvasEl: HTMLCanvasElement) => {
+          try {
+            // Try to draw the canvas - this might fail due to CORS
+            context.drawImage(canvasEl, 0, 0)
+            mapCaptured = true
+          } catch (error) {
+            console.warn('Could not capture canvas due to CORS:', error)
+          }
+        })
+      }
+      
+      // If map capture failed, create an informative image
+      if (!mapCaptured) {
+        // Draw a nice informative card
+        context.fillStyle = '#f8f9fa'
+        context.fillRect(0, 0, canvas.width, canvas.height)
+        
+        // Add border
+        context.strokeStyle = '#0072bc'
+        context.lineWidth = 3
+        context.strokeRect(10, 10, canvas.width - 20, canvas.height - 20)
+        
+        // Add UN ESCAP header
+        context.fillStyle = '#0072bc'
+        context.font = 'bold 28px Arial'
+        context.textAlign = 'center'
+        context.fillText('UN ESCAP', canvas.width / 2, 60)
+        
+        context.font = 'bold 20px Arial'
+        context.fillText('Climate & Energy Risk Visualization', canvas.width / 2, 90)
+        
+        // Add country info
+        context.fillStyle = '#1a1a1a'
+        context.font = 'bold 24px Arial'
+        context.fillText(`Country: ${country.charAt(0).toUpperCase() + country.slice(1)}`, canvas.width / 2, 140)
+        
+        // Add overlay info if available
+        if (overlayInfo) {
+          context.font = '18px Arial'
+          context.fillStyle = '#0072bc'
+          context.fillText(`Layer: ${overlayInfo.name}`, canvas.width / 2, 180)
+          
+          if (overlayInfo.scenario) {
+            context.fillStyle = '#666'
+            context.font = '16px Arial'
+            context.fillText(`Scenario: ${overlayInfo.scenario}`, canvas.width / 2, 210)
+          }
+          
+          if (overlayInfo.year) {
+            context.fillText(`Year: ${overlayInfo.year}`, canvas.width / 2, 235)
+          }
+          
+          if (overlayInfo.season) {
+            context.fillText(`Season: ${overlayInfo.season}`, canvas.width / 2, 260)
+          }
+        } else {
+          context.font = '16px Arial'
+          context.fillStyle = '#666'
+          context.fillText('No overlay selected', canvas.width / 2, 180)
+        }
+        
+        // Add map coordinates
+        const view = map.getView()
+        const center = view.getCenter()
+        const zoom = view.getZoom()
+        
+        if (center && zoom) {
+          context.font = '14px Arial'
+          context.fillStyle = '#333'
+          context.fillText(`Center: ${center[1].toFixed(4)}°, ${center[0].toFixed(4)}°`, canvas.width / 2, canvas.height - 80)
+          context.fillText(`Zoom Level: ${zoom.toFixed(1)}`, canvas.width / 2, canvas.height - 60)
+        }
+        
+        // Add timestamp
+        context.font = '12px Arial'
+        context.fillStyle = '#999'
+        context.fillText(`Generated: ${new Date().toLocaleString()}`, canvas.width / 2, canvas.height - 30)
+      }
+      
+      // Always add metadata overlay (even if map was captured)
+      context.fillStyle = 'rgba(255, 255, 255, 0.95)'
+      context.fillRect(20, 20, 200, 60)
+      context.strokeStyle = '#0072bc'
+      context.lineWidth = 1
+      context.strokeRect(20, 20, 200, 60)
+      
+      context.fillStyle = '#0072bc'
+      context.font = 'bold 12px Arial'
+      context.textAlign = 'left'
+      context.fillText('UN ESCAP Map Export', 25, 35)
+      
+      context.font = '10px Arial'
+      context.fillStyle = '#333'
+      context.fillText(`Map ID: ${id}`, 25, 50)
+      context.fillText(`Exported: ${new Date().toISOString().split('T')[0]}`, 25, 65)
+      
+      // Create download
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0]
+      const overlayName = overlayInfo?.name?.replace(/[^a-zA-Z0-9\s]/g, '_') || 'no_overlay'
+      const filename = `UN_ESCAP_Map_${country}_${overlayName}_${timestamp}.png`
+      
+      // Convert to blob and download
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = filename
+          link.style.display = 'none'
+          
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          
+          // Clean up
+          URL.revokeObjectURL(url)
+          
+          toast.success('Map downloaded successfully!')
+          console.log('Map downloaded:', filename)
+        } else {
+          toast.error('Failed to create download file')
+        }
+        
+        setIsDownloading(false)
+      }, 'image/png', 1.0)
       
     } catch (error) {
-      console.error('Error initiating map download:', error)
+      console.error('Error in download function:', error)
       createFallbackDownload()
     }
   }
 
   const createFallbackDownload = () => {
     try {
-      // Create a text-based map information file
+      // Create a detailed JSON file with map information
       const view = mapInstanceRef.current?.getView()
       const center = view?.getCenter()
       const zoom = view?.getZoom()
       
-      const mapInfo = `UN ESCAP Climate & Energy Risk Visualization
-Map Information Export
-
-Country: ${country.charAt(0).toUpperCase() + country.slice(1)}
-Map ID: ${id}
-Basemap: ${basemap}
-${center ? `Center: ${center[1].toFixed(6)}, ${center[0].toFixed(6)}` : 'Center: Unknown'}
-${zoom ? `Zoom Level: ${zoom.toFixed(1)}` : 'Zoom: Unknown'}
-
-${overlayInfo ? `
-Overlay Information:
-- Type: ${overlayInfo.type}
-- Name: ${overlayInfo.name}
-${overlayInfo.scenario ? `- Scenario: ${overlayInfo.scenario}` : ''}
-${overlayInfo.year ? `- Year: ${overlayInfo.year}` : ''}
-${overlayInfo.season ? `- Season: ${overlayInfo.season}` : ''}
-` : 'No overlay selected'}
-
-Generated: ${new Date().toISOString()}
-
-Note: Map image could not be exported due to browser security restrictions.
-This file contains the map configuration for reference.
-`
-
-      const blob = new Blob([mapInfo], { type: 'text/plain' })
-      const link = document.createElement('a')
+      const mapData = {
+        title: "UN ESCAP Climate & Energy Risk Visualization",
+        exportType: "Map Information",
+        country: country.charAt(0).toUpperCase() + country.slice(1),
+        mapId: id,
+        basemap: basemap,
+        coordinates: center ? {
+          latitude: center[1],
+          longitude: center[0]
+        } : null,
+        zoomLevel: zoom || null,
+        overlay: overlayInfo || null,
+        timestamp: new Date().toISOString(),
+        note: "Map image could not be exported due to browser security restrictions"
+      }
+      
+      const jsonString = JSON.stringify(mapData, null, 2)
+      const blob = new Blob([jsonString], { type: 'application/json' })
+      
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0]
-      const overlayName = overlayInfo?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'no_overlay'
-      link.download = `map_info_${country}_${overlayName}_${timestamp}.txt`
-      link.href = URL.createObjectURL(blob)
+      const overlayName = overlayInfo?.name?.replace(/[^a-zA-Z0-9\s]/g, '_') || 'no_overlay'
+      const filename = `UN_ESCAP_Map_Info_${country}_${overlayName}_${timestamp}.json`
+      
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      link.style.display = 'none'
+      
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      URL.revokeObjectURL(link.href)
+      URL.revokeObjectURL(url)
       
-      toast.warning('Map image not available - downloaded map information instead')
+      toast.warning('Map image not available - downloaded map information as JSON file')
       setIsDownloading(false)
       
     } catch (error) {
       console.error('Error creating fallback download:', error)
-      toast.error('Unable to download map. Please try again.')
+      toast.error('Download failed. Please try again.')
       setIsDownloading(false)
     }
   }
