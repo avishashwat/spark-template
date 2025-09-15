@@ -272,6 +272,7 @@ export function MapComponent({
           name: f.name,
           country: f.country,
           hasGeojson: !!f.geojsonData,
+          hasDataKey: !!f.dataKey,
           featureCount: f.geojsonData?.features?.length || 0
         })))
         
@@ -284,15 +285,67 @@ export function MapComponent({
           return
         }
         
-        if (!countryBoundary.geojsonData) {
-          console.error('Boundary file found but no geojsonData:', countryBoundary)
+        let geojsonData: any = null
+        
+        // Check if we need to load from chunked storage
+        if (countryBoundary.dataKey && !countryBoundary.geojsonData) {
+          console.log('Loading boundary data from chunked storage:', countryBoundary.dataKey)
+          try {
+            // Function to retrieve chunked data
+            const getDataFromChunks = async (key: string): Promise<any> => {
+              const metaOrData = await window.spark.kv.get<any>(key)
+              
+              if (!metaOrData) return null
+              
+              // Check if it's chunked data
+              if (metaOrData && typeof metaOrData === 'object' && 'isChunked' in metaOrData && metaOrData.isChunked) {
+                const chunkMeta = metaOrData
+                console.log(`Retrieving ${chunkMeta.totalChunks} chunks for ${key}`)
+                
+                let reconstructedData = ''
+                for (let i = 0; i < chunkMeta.totalChunks; i++) {
+                  const chunk = await window.spark.kv.get<string>(`${key}_chunk_${i}`)
+                  if (chunk) {
+                    reconstructedData += chunk
+                  } else {
+                    throw new Error(`Missing chunk ${i} for ${key}`)
+                  }
+                }
+                
+                return JSON.parse(reconstructedData)
+              }
+              
+              // Return direct data if not chunked
+              return metaOrData
+            }
+            
+            const fullBoundaryData = await getDataFromChunks(countryBoundary.dataKey)
+            if (fullBoundaryData && fullBoundaryData.geojsonData) {
+              geojsonData = fullBoundaryData.geojsonData
+              console.log('Successfully loaded boundary data from chunks:', geojsonData.features?.length, 'features')
+            } else {
+              console.error('Failed to load boundary data from chunks')
+              return
+            }
+          } catch (error) {
+            console.error('Error loading chunked boundary data:', error)
+            return
+          }
+        } else if (countryBoundary.geojsonData) {
+          // Use directly available geojson data
+          geojsonData = countryBoundary.geojsonData
+          console.log('Using directly available geojson data:', geojsonData.features?.length, 'features')
+        }
+        
+        if (!geojsonData) {
+          console.error('No boundary geojson data available for country:', country)
           return
         }
         
         console.log('GeoJSON data structure:', {
-          type: countryBoundary.geojsonData.type,
-          features: countryBoundary.geojsonData.features?.length,
-          firstFeature: countryBoundary.geojsonData.features?.[0]?.geometry?.type
+          type: geojsonData.type,
+          features: geojsonData.features?.length,
+          firstFeature: geojsonData.features?.[0]?.geometry?.type
         })
         
         // Remove existing boundary and mask layers if any
@@ -313,11 +366,9 @@ export function MapComponent({
           layers.remove(existingMaskLayer)
         }
         
-        // Use the actual GeoJSON data from the uploaded shapefile
-        const geojsonData = countryBoundary.geojsonData
         console.log('Processing GeoJSON data with', geojsonData.features?.length, 'features')
         
-        if (!geojsonData || !geojsonData.features || geojsonData.features.length === 0) {
+        if (!geojsonData.features || geojsonData.features.length === 0) {
           console.error('Invalid GeoJSON data:', geojsonData)
           return
         }

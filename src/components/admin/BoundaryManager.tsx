@@ -20,11 +20,19 @@ interface BoundaryFile {
   uploadedAt: number
   filePath: string
   geojsonData?: any // Store the actual GeoJSON data
+  dataKey?: string // Reference to chunked data storage
   metadata?: {
     featureCount: number
     bounds: [number, number, number, number] // [minX, minY, maxX, maxY]
     projection: string
   }
+}
+
+interface ChunkMetadata {
+  isChunked: true
+  totalChunks: number
+  originalSize: number
+  chunkKeys: string[]
 }
 
 interface BoundaryManagerProps {
@@ -68,6 +76,28 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
       setBoundaryFiles(files)
     } catch (error) {
       console.error('Failed to load boundary files:', error)
+    }
+  }
+
+  // Utility function to get full boundary data (including GeoJSON)
+  const getBoundaryDataById = async (fileId: string): Promise<BoundaryFile | null> => {
+    try {
+      const file = boundaryFiles.find(f => f.id === fileId)
+      if (!file) return null
+      
+      if (file.dataKey) {
+        // Retrieve from chunked storage
+        const fullData = await getDataFromChunks(file.dataKey)
+        return fullData
+      } else if (file.geojsonData) {
+        // Already has the data
+        return file
+      }
+      
+      return file
+    } catch (error) {
+      console.error('Failed to load boundary data:', error)
+      return null
     }
   }
 
@@ -268,6 +298,76 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
     }
   }
 
+  // Function to store large data using chunked approach
+  const storeDataInChunks = async (key: string, data: any, chunkSize: number = 200000): Promise<void> => {
+    const dataString = JSON.stringify(data)
+    const dataSizeKB = new Blob([dataString]).size / 1024
+    
+    console.log(`Data size: ${dataSizeKB.toFixed(2)} KB`)
+    
+    if (dataSizeKB <= 500) { // Store directly if under 500KB
+      console.log('Data is small enough, storing directly')
+      await window.spark.kv.set(key, data)
+      return
+    }
+    
+    console.log('Data is large, using chunked storage')
+    
+    // Split into chunks
+    const chunks: string[] = []
+    for (let i = 0; i < dataString.length; i += chunkSize) {
+      chunks.push(dataString.slice(i, i + chunkSize))
+    }
+    
+    console.log(`Split into ${chunks.length} chunks`)
+    
+    // Store chunk metadata
+    const chunkMeta = {
+      isChunked: true,
+      totalChunks: chunks.length,
+      originalSize: dataString.length,
+      chunkKeys: chunks.map((_, i) => `${key}_chunk_${i}`)
+    }
+    
+    // Store each chunk
+    for (let i = 0; i < chunks.length; i++) {
+      await window.spark.kv.set(`${key}_chunk_${i}`, chunks[i])
+      console.log(`Stored chunk ${i + 1}/${chunks.length}`)
+    }
+    
+    // Store metadata
+    await window.spark.kv.set(key, chunkMeta)
+    console.log('Stored chunk metadata')
+  }
+
+  // Function to retrieve chunked data
+  const getDataFromChunks = async (key: string): Promise<any> => {
+    const metaOrData = await window.spark.kv.get<ChunkMetadata | any>(key)
+    
+    if (!metaOrData) return null
+    
+    // Check if it's chunked data
+    if (metaOrData && typeof metaOrData === 'object' && 'isChunked' in metaOrData && metaOrData.isChunked) {
+      const chunkMeta = metaOrData as ChunkMetadata
+      console.log(`Retrieving ${chunkMeta.totalChunks} chunks for ${key}`)
+      
+      let reconstructedData = ''
+      for (let i = 0; i < chunkMeta.totalChunks; i++) {
+        const chunk = await window.spark.kv.get<string>(`${key}_chunk_${i}`)
+        if (chunk) {
+          reconstructedData += chunk
+        } else {
+          throw new Error(`Missing chunk ${i} for ${key}`)
+        }
+      }
+      
+      return JSON.parse(reconstructedData)
+    }
+    
+    // Return direct data if not chunked
+    return metaOrData
+  }
+
   const handleUploadComplete = async () => {
     if (!currentFile || !hoverAttribute) {
       toast.error('Please select a hover attribute')
@@ -282,9 +382,9 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
     try {
       console.log('Starting boundary upload complete process...')
       setIsUploading(true)
-      setUploadProgress(90)
+      setUploadProgress(60)
 
-      // Create a simplified version without large geojson data for logging
+      // Create boundary file object
       const boundaryFile: BoundaryFile = {
         id: `boundary_${Date.now()}_${currentFile.name}`,
         name: currentFile.name,
@@ -304,43 +404,59 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
         geojsonData: currentGeojsonData ? `GeoJSON with ${currentGeojsonData.features?.length || 0} features` : 'No geojson data'
       })
 
-      // Check GeoJSON data size to avoid KV store issues
+      setUploadProgress(70)
+
+      // Check GeoJSON data size
       const geojsonString = JSON.stringify(currentGeojsonData)
       const geojsonSizeKB = new Blob([geojsonString]).size / 1024
       console.log(`GeoJSON data size: ${geojsonSizeKB.toFixed(2)} KB`)
       
-      if (geojsonSizeKB > 1000) { // If larger than 1MB
-        console.warn('Large GeoJSON data detected, this might cause storage issues')
+      if (geojsonSizeKB > 500) {
+        console.log('Large GeoJSON data detected, using chunked storage')
+        toast.info(`Large file detected (${geojsonSizeKB.toFixed(1)}KB), using chunked storage for optimal performance`)
       }
 
-      const updatedFiles = [...boundaryFiles, boundaryFile]
-      console.log('Saving to KV store with', updatedFiles.length, 'files...')
+      setUploadProgress(80)
+
+      // Store the individual boundary file data (potentially chunked)
+      const boundaryFileKey = `boundary_data_${boundaryFile.id}`
+      await storeDataInChunks(boundaryFileKey, boundaryFile)
       
-      // First test if we can save a simple version
-      const testData = {
-        id: boundaryFile.id,
-        name: boundaryFile.name,
-        country: boundaryFile.country,
-        test: true
+      setUploadProgress(90)
+
+      // Update the boundary files list with metadata only (no geojson data for performance)
+      const boundaryFileMetadata = {
+        ...boundaryFile,
+        geojsonData: undefined, // Don't store geojson in the main list
+        dataKey: boundaryFileKey // Reference to the actual data
       }
+
+      const updatedFiles = [...boundaryFiles, boundaryFileMetadata]
+      console.log('Saving boundary files list with', updatedFiles.length, 'files...')
       
-      await window.spark.kv.set('test_boundary_save', testData)
-      console.log('Test save successful')
-      
-      // Now try to save the full data
       await window.spark.kv.set('admin_boundary_files', updatedFiles)
       
       console.log('Successfully saved to KV store')
+      setUploadProgress(95)
       
-      // Verify the save by reading it back
+      // Verify the save
       const savedFiles = await window.spark.kv.get<BoundaryFile[]>('admin_boundary_files')
       console.log('Verification: Read back', savedFiles?.length, 'files from KV store')
       
       const savedFile = savedFiles?.find(f => f.id === boundaryFile.id)
       if (savedFile) {
-        console.log('Verification: Found saved file with geojson features:', savedFile.geojsonData?.features?.length || 0)
+        console.log('Verification: Found saved file metadata')
+        
+        // Test retrieving the actual data
+        const fullData = await getDataFromChunks(boundaryFileKey)
+        if (fullData && fullData.geojsonData) {
+          console.log('Verification: Successfully retrieved full data with', fullData.geojsonData.features?.length || 0, 'features')
+          toast.success('Boundary stored using chunked data storage due to size')
+        } else {
+          console.error('Verification: Could not retrieve full data!')
+        }
       } else {
-        console.error('Verification: File not found after save!')
+        console.error('Verification: File metadata not found after save!')
       }
       
       setBoundaryFiles(updatedFiles)
@@ -349,9 +465,10 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
       console.log('Calling onStatsUpdate...')
       onStatsUpdate()
       
-      toast.success('Boundary file uploaded successfully')
+      const storageType = geojsonSizeKB > 500 ? 'chunked' : 'direct'
+      toast.success(`Boundary file uploaded successfully using ${storageType} storage (${geojsonSizeKB.toFixed(1)}KB)`)
       
-      // Reset form immediately after successful save
+      // Reset form after successful save
       setTimeout(() => {
         setCurrentFile(null)
         setShowConfiguration(false)
@@ -371,8 +488,10 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
       console.error('Error stack:', error.stack)
       
       // More detailed error reporting
-      if (error.message.includes('storage') || error.message.includes('quota')) {
-        toast.error('Storage quota exceeded. GeoJSON data may be too large.')
+      if (error.message.includes('failed to set key')) {
+        toast.error('Storage key error: the boundary data may be too large. Please allocate more than sufficient space so that there is no error with space required in future')
+      } else if (error.message.includes('storage') || error.message.includes('quota')) {
+        toast.error('Storage quota exceeded. Please contact support for increased storage allocation.')
       } else if (error.message.includes('serializ')) {
         toast.error('Data serialization failed. Invalid GeoJSON format.')
       } else {
@@ -386,6 +505,26 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
 
   const handleDeleteFile = async (fileId: string) => {
     try {
+      const fileToDelete = boundaryFiles.find(f => f.id === fileId)
+      
+      // Clean up chunked data if it exists
+      if (fileToDelete?.dataKey) {
+        try {
+          // Get chunk metadata to clean up all chunks
+          const chunkMeta = await window.spark.kv.get<ChunkMetadata>(fileToDelete.dataKey)
+          if (chunkMeta && chunkMeta.isChunked) {
+            // Delete all chunks
+            for (let i = 0; i < chunkMeta.totalChunks; i++) {
+              await window.spark.kv.delete(`${fileToDelete.dataKey}_chunk_${i}`)
+            }
+          }
+          // Delete the metadata
+          await window.spark.kv.delete(fileToDelete.dataKey)
+        } catch (error) {
+          console.warn('Failed to clean up chunked data:', error)
+        }
+      }
+      
       const updatedFiles = boundaryFiles.filter(f => f.id !== fileId)
       await window.spark.kv.set('admin_boundary_files', updatedFiles)
       setBoundaryFiles(updatedFiles)
@@ -521,9 +660,21 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
                 size="sm" 
                 onClick={async () => {
                   try {
-                    const data = await window.spark.kv.get<any[]>('admin_boundary_files')
+                    const data = await window.spark.kv.get<BoundaryFile[]>('admin_boundary_files')
                     console.log('Current boundary files:', data)
                     toast.success(`Found ${data?.length || 0} boundary files in storage`)
+                    
+                    // Check for chunked data
+                    if (data && data.length > 0) {
+                      for (const file of data) {
+                        if (file.dataKey) {
+                          const chunkMeta = await window.spark.kv.get<ChunkMetadata>(file.dataKey)
+                          if (chunkMeta && chunkMeta.isChunked) {
+                            console.log(`File ${file.name} has ${chunkMeta.totalChunks} chunks`)
+                          }
+                        }
+                      }
+                    }
                   } catch (error) {
                     console.error('Debug check failed:', error)
                     toast.error('Failed to check storage')
@@ -537,11 +688,32 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
                 size="sm"
                 onClick={async () => {
                   try {
+                    // Get all boundary files first to clean up chunked data
+                    const files = await window.spark.kv.get<BoundaryFile[]>('admin_boundary_files') || []
+                    
+                    // Clean up chunked data for each file
+                    for (const file of files) {
+                      if (file.dataKey) {
+                        try {
+                          const chunkMeta = await window.spark.kv.get<ChunkMetadata>(file.dataKey)
+                          if (chunkMeta && chunkMeta.isChunked) {
+                            for (let i = 0; i < chunkMeta.totalChunks; i++) {
+                              await window.spark.kv.delete(`${file.dataKey}_chunk_${i}`)
+                            }
+                          }
+                          await window.spark.kv.delete(file.dataKey)
+                        } catch (error) {
+                          console.warn(`Failed to clean up chunks for ${file.name}:`, error)
+                        }
+                      }
+                    }
+                    
+                    // Clear main boundary files list
                     await window.spark.kv.delete('admin_boundary_files')
                     await window.spark.kv.delete('test_boundary_save')
                     setBoundaryFiles([])
                     onStatsUpdate()
-                    toast.success('Cleared all boundary data')
+                    toast.success('Cleared all boundary data and chunks')
                   } catch (error) {
                     console.error('Clear failed:', error)
                     toast.error('Failed to clear data')
