@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -103,6 +104,7 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
   }
 
   const handleCategoryChange = (category: string) => {
+    console.log('Category clicked:', category); // Debug log
     setSelectedCategory(category)
     setShowSelectionPanel(true)
     resetSelections()
@@ -191,7 +193,7 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
   const renderSelectionPanel = () => {
     return (
       <div 
-        className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center"
+        className="modal-overlay bg-black/60 flex items-center justify-center backdrop-blur-sm"
         onClick={() => setShowSelectionPanel(false)}
       >
         <div 
@@ -422,7 +424,9 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
                 <Button
                   key={id}
                   variant="outline"
-                  className="justify-start h-12 text-sm px-4 hover:bg-primary/10 border-2 hover:border-primary/30 transition-all duration-200"
+                  className={`justify-start h-12 text-sm px-4 hover:bg-primary/10 border-2 hover:border-primary/30 transition-all duration-200 ${
+                    selectedCategory === id ? 'bg-primary/10 border-primary/30' : ''
+                  }`}
                   onClick={() => handleCategoryChange(id)}
                 >
                   <Icon className={`w-4 h-4 mr-2 ${color}`} />
@@ -495,8 +499,11 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
         </CardContent>
       </Card>
       
-      {/* Floating Selection Panel - Direct render without portal */}
-      {showSelectionPanel && selectedCategory && renderSelectionPanel()}
+      {/* Floating Selection Panel */}
+      {showSelectionPanel && selectedCategory && createPortal(
+        renderSelectionPanel(),
+        document.body
+      )}
     </>
   )
 }
