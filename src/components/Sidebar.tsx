@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
-import { Stack, Thermometer, Drop, Flashlight, Eye, EyeSlash, Globe } from '@phosphor-icons/react'
+import { Stack, Thermometer, Drop, Flashlight, Eye, EyeSlash, Globe, X, Plus } from '@phosphor-icons/react'
 
 interface LayerConfig {
   id: string
@@ -79,6 +79,7 @@ const energyInfrastructure = [
 
 export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }: SidebarProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('')
+  const [showSelectionPanel, setShowSelectionPanel] = useState(false)
   const [climateVariable, setClimateVariable] = useState<string>('')
   const [scenario, setScenario] = useState<string>('')
   const [seasonalityType, setSeasonalityType] = useState<string>('')
@@ -98,10 +99,12 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
     setGiriVariable('')
     setGiriScenario('')
     setEnergyType('')
+    setShowSelectionPanel(false)
   }
 
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category)
+    setShowSelectionPanel(true)
     resetSelections()
   }
 
@@ -140,6 +143,10 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
       
       setActiveLayers([...activeLayers, newLayer])
       onLayerChange(activeMapId, layerInfo)
+      
+      // Hide selection panel after adding layer
+      setShowSelectionPanel(false)
+      setSelectedCategory('')
     }
   }
 
@@ -181,187 +188,167 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
     return false
   }
 
-  return (
-    <Card className="h-full rounded-none border-y-0 border-l-0">
-      <CardHeader className="pb-4">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Stack className="w-5 h-5 text-primary" />
-          Layer Controls
-        </CardTitle>
-        <Badge variant="outline" className="w-fit">
-          Active Map: {activeMapId}
-        </Badge>
-      </CardHeader>
-      
-      <CardContent className="space-y-6 custom-scroll overflow-y-auto max-h-[calc(100vh-140px)]">
-        {/* Basemap Selection */}
-        <div className="space-y-3">
-          <h3 className="font-medium text-sm text-foreground flex items-center gap-2">
-            <Globe className="w-4 h-4 text-primary" />
-            Basemap
-          </h3>
-          <Select value={basemap} onValueChange={onBasemapChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select basemap" />
-            </SelectTrigger>
-            <SelectContent>
-              {basemaps.map(map => (
-                <SelectItem key={map.id} value={map.id}>
-                  {map.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+  const renderSelectionPanel = () => {
+    if (!showSelectionPanel) return null
 
-        <Separator />
-
-        {/* Category Selection */}
-        <div className="space-y-3">
-          <h3 className="font-medium text-sm text-foreground">Data Category</h3>
-          <div className="grid gap-2">
-            {[
-              { id: 'climate', label: 'Climate Variables', icon: Thermometer },
-              { id: 'giri', label: 'GIRI Hazards', icon: Drop },
-              { id: 'energy', label: 'Energy Infrastructure', icon: Flashlight }
-            ].map(({ id, label, icon: Icon }) => (
-              <Button
-                key={id}
-                variant={selectedCategory === id ? "default" : "outline"}
-                className="justify-start h-10"
-                onClick={() => handleCategoryChange(id)}
-              >
-                <Icon className="w-4 h-4 mr-2" />
-                {label}
-              </Button>
-            ))}
+    return (
+      <div className="fixed inset-0 bg-black/20 z-50 flex items-center justify-center" onClick={() => setShowSelectionPanel(false)}>
+        <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between p-4 border-b">
+            <h3 className="font-semibold text-base">
+              {selectedCategory === 'climate' && 'Climate Variables'}
+              {selectedCategory === 'giri' && 'GIRI Hazards'}
+              {selectedCategory === 'energy' && 'Energy Infrastructure'}
+            </h3>
+            <Button size="sm" variant="ghost" onClick={() => setShowSelectionPanel(false)}>
+              <X className="w-4 h-4" />
+            </Button>
           </div>
-        </div>
+          
+          <div className="p-4 space-y-3 overflow-y-auto max-h-[60vh]">
+            {/* Climate Variables */}
+            {selectedCategory === 'climate' && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground">Variable</label>
+                  <Select value={climateVariable} onValueChange={setClimateVariable}>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Select variable" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {climateVariables.map(variable => (
+                        <SelectItem key={variable} value={variable} className="text-sm">
+                          {variable}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-        {/* Climate Variables */}
-        {selectedCategory === 'climate' && (
-          <div className="space-y-4">
-            <Separator />
-            <div className="space-y-3">
-              <h4 className="font-medium text-sm">Climate Variable</h4>
-              <Select value={climateVariable} onValueChange={setClimateVariable}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select variable" />
-                </SelectTrigger>
-                <SelectContent>
-                  {climateVariables.map(variable => (
-                    <SelectItem key={variable} value={variable}>
-                      {variable}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                {climateVariable && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">Scenario</label>
+                    <Select value={scenario} onValueChange={setScenario}>
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Select scenario" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {scenarios.map(s => (
+                          <SelectItem key={s} value={s} className="text-sm">
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
-            {climateVariable && (
-              <div className="space-y-3">
-                <h4 className="font-medium text-sm">Scenario</h4>
-                <Select value={scenario} onValueChange={setScenario}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select scenario" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {scenarios.map(s => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                {scenario && scenario !== 'Historical' && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">Year Range</label>
+                    <Select value={yearRange} onValueChange={setYearRange}>
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Select year range" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {yearRanges.map(range => (
+                          <SelectItem key={range} value={range} className="text-sm">
+                            {range}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {scenario && (scenario === 'Historical' || yearRange) && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">Seasonality</label>
+                    <Select value={seasonalityType} onValueChange={setSeasonalityType}>
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Select seasonality" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {seasonality.map(s => (
+                          <SelectItem key={s} value={s} className="text-sm">
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {seasonalityType === 'Seasonal' && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">Season</label>
+                    <Select value={season} onValueChange={setSeason}>
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Select season" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="jan_mar" className="text-sm">January - March</SelectItem>
+                        <SelectItem value="apr_jun" className="text-sm">April - June</SelectItem>
+                        <SelectItem value="jul_sep" className="text-sm">July - September</SelectItem>
+                        <SelectItem value="oct_dec" className="text-sm">October - December</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </>
             )}
 
-            {scenario && scenario !== 'Historical' && (
-              <div className="space-y-3">
-                <h4 className="font-medium text-sm">Year Range</h4>
-                <Select value={yearRange} onValueChange={setYearRange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select year range" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {yearRanges.map(range => (
-                      <SelectItem key={range} value={range}>
-                        {range}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            {/* GIRI Variables */}
+            {selectedCategory === 'giri' && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground">Variable</label>
+                  <Select value={giriVariable} onValueChange={setGiriVariable}>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Select variable" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {giriVariables.map(variable => (
+                        <SelectItem key={variable} value={variable} className="text-sm">
+                          {variable}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {giriVariable && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">Scenario</label>
+                    <Select value={giriScenario} onValueChange={setGiriScenario}>
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Select scenario" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {giriScenarios.map(s => (
+                          <SelectItem key={s} value={s} className="text-sm">
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </>
             )}
 
-            {scenario && (scenario === 'Historical' || yearRange) && (
-              <div className="space-y-3">
-                <h4 className="font-medium text-sm">Seasonality</h4>
-                <Select value={seasonalityType} onValueChange={setSeasonalityType}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select seasonality" />
+            {/* Energy Infrastructure */}
+            {selectedCategory === 'energy' && (
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Infrastructure Type</label>
+                <Select value={energyType} onValueChange={setEnergyType}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {seasonality.map(s => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {seasonalityType === 'Seasonal' && (
-              <div className="space-y-3">
-                <h4 className="font-medium text-sm">Season</h4>
-                <Select value={season} onValueChange={setSeason}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select season" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="jan_mar">January - March</SelectItem>
-                    <SelectItem value="apr_jun">April - June</SelectItem>
-                    <SelectItem value="jul_sep">July - September</SelectItem>
-                    <SelectItem value="oct_dec">October - December</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* GIRI Variables */}
-        {selectedCategory === 'giri' && (
-          <div className="space-y-4">
-            <Separator />
-            <div className="space-y-3">
-              <h4 className="font-medium text-sm">GIRI Variable</h4>
-              <Select value={giriVariable} onValueChange={setGiriVariable}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select variable" />
-                </SelectTrigger>
-                <SelectContent>
-                  {giriVariables.map(variable => (
-                    <SelectItem key={variable} value={variable}>
-                      {variable}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {giriVariable && (
-              <div className="space-y-3">
-                <h4 className="font-medium text-sm">Scenario</h4>
-                <Select value={giriScenario} onValueChange={setGiriScenario}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select scenario" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {giriScenarios.map(s => (
-                      <SelectItem key={s} value={s}>
-                        {s}
+                    {energyInfrastructure.map(type => (
+                      <SelectItem key={type} value={type} className="text-sm">
+                        {type}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -369,103 +356,143 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
               </div>
             )}
           </div>
-        )}
-
-        {/* Energy Infrastructure */}
-        {selectedCategory === 'energy' && (
-          <div className="space-y-4">
-            <Separator />
-            <div className="space-y-3">
-              <h4 className="font-medium text-sm">Infrastructure Type</h4>
-              <Select value={energyType} onValueChange={setEnergyType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {energyInfrastructure.map(type => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        )}
-
-        {/* Add Layer Button */}
-        {selectedCategory && (
-          <>
-            <Separator />
+          
+          <div className="p-4 border-t bg-gray-50">
             <Button 
               onClick={addLayer}
               disabled={!canAddLayer()}
-              className="w-full"
+              className="w-full h-8 text-sm"
+              size="sm"
             >
-              Add Layer to Map
+              <Plus className="w-3 h-3 mr-1" />
+              Add Layer
             </Button>
-          </>
-        )}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
-        {/* Active Layers */}
-        {activeLayers.length > 0 && (
-          <>
-            <Separator />
-            <div className="space-y-4">
-              <h3 className="font-medium text-sm">Active Layers</h3>
-              <div className="space-y-3">
-                {activeLayers.map(layer => (
-                  <Card key={layer.id} className="p-3">
-                    <div className="space-y-3">
+  return (
+    <>
+      <Card className="h-full rounded-none border-y-0 border-l-0">
+        <CardHeader className="pb-3 px-4 pt-4">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Stack className="w-4 h-4 text-primary" />
+            Layer Controls
+          </CardTitle>
+        </CardHeader>
+        
+        <CardContent className="space-y-4 custom-scroll overflow-y-auto max-h-[calc(100vh-120px)] px-4">
+          {/* Basemap Selection */}
+          <div className="space-y-2">
+            <h3 className="font-medium text-xs text-muted-foreground flex items-center gap-2">
+              <Globe className="w-3 h-3" />
+              BASEMAP
+            </h3>
+            <Select value={basemap} onValueChange={onBasemapChange}>
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue placeholder="Select basemap" />
+              </SelectTrigger>
+              <SelectContent>
+                {basemaps.map(map => (
+                  <SelectItem key={map.id} value={map.id} className="text-sm">
+                    {map.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Separator className="my-3" />
+
+          {/* Data Categories */}
+          <div className="space-y-2">
+            <h3 className="font-medium text-xs text-muted-foreground">DATA LAYERS</h3>
+            <div className="grid gap-1">
+              {[
+                { id: 'climate', label: 'Climate Variables', icon: Thermometer, color: 'text-orange-500' },
+                { id: 'giri', label: 'GIRI Hazards', icon: Drop, color: 'text-blue-500' },
+                { id: 'energy', label: 'Energy Infrastructure', icon: Flashlight, color: 'text-yellow-500' }
+              ].map(({ id, label, icon: Icon, color }) => (
+                <Button
+                  key={id}
+                  variant="ghost"
+                  className="justify-start h-8 text-sm px-2 hover:bg-muted/50"
+                  onClick={() => handleCategoryChange(id)}
+                >
+                  <Icon className={`w-3 h-3 mr-2 ${color}`} />
+                  {label}
+                  <Plus className="w-3 h-3 ml-auto text-muted-foreground" />
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Active Layers */}
+          {activeLayers.length > 0 && (
+            <>
+              <Separator className="my-3" />
+              <div className="space-y-2">
+                <h3 className="font-medium text-xs text-muted-foreground">ACTIVE LAYERS</h3>
+                <div className="space-y-2">
+                  {activeLayers.map(layer => (
+                    <div key={layer.id} className="bg-muted/30 rounded-md p-2 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">{layer.name}</span>
-                        <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium truncate">{layer.name}</div>
+                          <Badge variant="secondary" className="text-xs h-4 px-1 mt-1">
+                            {layer.category.toUpperCase()}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1 ml-2">
                           <Button
                             size="sm"
                             variant="ghost"
+                            className="h-6 w-6 p-0"
                             onClick={() => toggleLayerVisibility(layer.id)}
                           >
                             {layer.visible ? (
-                              <Eye className="w-4 h-4" />
+                              <Eye className="w-3 h-3" />
                             ) : (
-                              <EyeSlash className="w-4 h-4" />
+                              <EyeSlash className="w-3 h-3" />
                             )}
                           </Button>
                           <Button
                             size="sm"
                             variant="ghost"
+                            className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                             onClick={() => removeLayer(layer.id)}
                           >
-                            ×
+                            <X className="w-3 h-3" />
                           </Button>
                         </div>
                       </div>
                       
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         <div className="flex items-center justify-between text-xs">
-                          <span>Opacity</span>
-                          <span>{layer.opacity}%</span>
+                          <span className="text-muted-foreground">Opacity</span>
+                          <span className="text-xs">{layer.opacity}%</span>
                         </div>
                         <Slider
                           value={[layer.opacity]}
                           onValueChange={([value]) => updateLayerOpacity(layer.id, value)}
                           max={100}
                           step={10}
-                          className="w-full"
+                          className="w-full h-2"
                         />
                       </div>
-                      
-                      <Badge variant="secondary" className="text-xs">
-                        {layer.category.toUpperCase()}
-                      </Badge>
                     </div>
-                  </Card>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+            </>
+          )}
+        </CardContent>
+      </Card>
+      
+      {/* Floating Selection Panel */}
+      {renderSelectionPanel()}
+    </>
   )
 }

@@ -108,6 +108,54 @@
   line-height: 1;
 }
 
+/* Simple scale bar styling like the reference image */
+.ol-scale-line-simple {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 4px;
+  padding: 4px 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: #333;
+  min-width: 60px;
+}
+
+.ol-scale-line-simple .ol-scale-line-inner {
+  border: none;
+  border-bottom: 2px solid #333;
+  color: #333;
+  font-size: 11px;
+  font-weight: 500;
+  margin: 0;
+  text-align: center;
+  height: auto;
+  line-height: 1.2;
+  padding-top: 2px;
+  position: relative;
+}
+
+.ol-scale-line-simple .ol-scale-line-inner::before,
+.ol-scale-line-simple .ol-scale-line-inner::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  width: 2px;
+  height: 4px;
+  background: #333;
+}
+
+.ol-scale-line-simple .ol-scale-line-inner::before {
+  left: -1px;
+}
+
+.ol-scale-line-simple .ol-scale-line-inner::after {
+  right: -1px;
+}
+
 .ol-attribution {
   bottom: 4px;
   right: 4px;

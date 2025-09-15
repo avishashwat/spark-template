@@ -31,22 +31,26 @@ const basemapSources = {
     // Use Cartodb tile server instead to avoid OSM blocking
     url: 'https://{a-c}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
     attributions: '© OpenStreetMap contributors © CARTO',
-    maxZoom: 18
+    maxZoom: 18,
+    crossOrigin: 'anonymous'
   }),
   satellite: () => new XYZ({
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attributions: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
-    maxZoom: 18
+    maxZoom: 18,
+    crossOrigin: 'anonymous'
   }),
   terrain: () => new XYZ({
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}',
     attributions: 'Tiles © Esri — Source: USGS, Esri, TANA, DeLorme, and NPS',
-    maxZoom: 18
+    maxZoom: 18,
+    crossOrigin: 'anonymous'
   }),
   street: () => new XYZ({
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
     attributions: 'Tiles © Esri — Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012',
-    maxZoom: 18
+    maxZoom: 18,
+    crossOrigin: 'anonymous'
   })
 }
 
@@ -128,10 +132,11 @@ export function MapComponent({
           className: 'ol-zoom',
         }),
         new ScaleLine({
-          className: 'ol-scale-line',
+          className: 'ol-scale-line-simple',
           bar: true,
-          text: false,
-          minWidth: 40,
+          text: true,
+          minWidth: 64,
+          maxWidth: 100,
         }),
       ]),
     })
@@ -217,48 +222,78 @@ export function MapComponent({
     if (!mapInstanceRef.current) return
     
     const map = mapInstanceRef.current
-    map.once('rendercomplete', () => {
-      const mapCanvas = document.createElement('canvas')
-      const size = map.getSize()
-      if (!size) return
-      
-      mapCanvas.width = size[0]
-      mapCanvas.height = size[1]
-      const mapContext = mapCanvas.getContext('2d')
-      if (!mapContext) return
-      
-      Array.prototype.forEach.call(
-        map.getViewport().querySelectorAll('.ol-layer canvas, canvas.ol-layer'),
-        (canvas: HTMLCanvasElement) => {
-          if (canvas.width > 0) {
-            const opacity = canvas.parentElement?.style.opacity || canvas.style.opacity
-            mapContext.globalAlpha = opacity === '' ? 1 : Number(opacity)
-            
-            let matrix
-            const transform = canvas.style.transform
-            if (transform) {
-              matrix = transform
-                .match(/^matrix\(([^\(]*)\)$/)?.[1]
-                ?.split(',')
-                ?.map(Number)
+    
+    try {
+      map.once('rendercomplete', () => {
+        try {
+          const mapCanvas = document.createElement('canvas')
+          const size = map.getSize()
+          if (!size) return
+          
+          mapCanvas.width = size[0]
+          mapCanvas.height = size[1]
+          const mapContext = mapCanvas.getContext('2d')
+          if (!mapContext) return
+          
+          // Set a white background
+          mapContext.fillStyle = '#ffffff'
+          mapContext.fillRect(0, 0, mapCanvas.width, mapCanvas.height)
+          
+          Array.prototype.forEach.call(
+            map.getViewport().querySelectorAll('.ol-layer canvas, canvas.ol-layer'),
+            (canvas: HTMLCanvasElement) => {
+              if (canvas.width > 0) {
+                try {
+                  const opacity = canvas.parentElement?.style.opacity || canvas.style.opacity
+                  mapContext.globalAlpha = opacity === '' ? 1 : Number(opacity)
+                  
+                  let matrix
+                  const transform = canvas.style.transform
+                  if (transform) {
+                    matrix = transform
+                      .match(/^matrix\(([^\(]*)\)$/)?.[1]
+                      ?.split(',')
+                      ?.map(Number)
+                  }
+                  
+                  if (matrix) {
+                    mapContext.setTransform(...matrix)
+                  }
+                  mapContext.drawImage(canvas, 0, 0)
+                  mapContext.setTransform(1, 0, 0, 1, 0, 0)
+                  mapContext.globalAlpha = 1
+                } catch (e) {
+                  console.warn('Skipping canvas due to CORS restriction:', e)
+                }
+              }
             }
-            
-            if (matrix) {
-              mapContext.setTransform(...matrix)
-            }
-            mapContext.drawImage(canvas, 0, 0)
-            mapContext.setTransform(1, 0, 0, 1, 0, 0)
-            mapContext.globalAlpha = 1
+          )
+          
+          // Fallback: Create a simple map info image if canvas export fails
+          if (!mapCanvas.toDataURL().includes('data:image')) {
+            mapContext.fillStyle = '#f0f0f0'
+            mapContext.fillRect(0, 0, mapCanvas.width, mapCanvas.height)
+            mapContext.fillStyle = '#333'
+            mapContext.font = '16px Inter'
+            mapContext.textAlign = 'center'
+            mapContext.fillText(`Map of ${country}`, mapCanvas.width / 2, mapCanvas.height / 2)
+            mapContext.fillText(`${overlayInfo?.name || 'No overlay'}`, mapCanvas.width / 2, mapCanvas.height / 2 + 30)
           }
+          
+          const link = document.createElement('a')
+          link.download = `map_${id}_${country}_${Date.now()}.png`
+          link.href = mapCanvas.toDataURL()
+          link.click()
+        } catch (error) {
+          console.error('Error creating map image:', error)
+          // Show a user-friendly error message
+          alert('Unable to download map due to security restrictions. Please try using a different basemap.')
         }
-      )
-      
-      const link = document.createElement('a')
-      link.download = `map_${id}_${country}_${Date.now()}.png`
-      link.href = mapCanvas.toDataURL()
-      link.click()
-    })
-    map.renderSync()
+      })
+      map.renderSync()
+    } catch (error) {
+      console.error('Error initiating map download:', error)
+    }
   }
 
   const getOverlayDisplayText = () => {
