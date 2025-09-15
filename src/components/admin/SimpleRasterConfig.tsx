@@ -26,11 +26,11 @@ export function SimpleRasterConfig({ file, onSave, onCancel }: SimpleRasterConfi
   const [rasterStats, setRasterStats] = useState<{ min: number; max: number; mean: number } | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(true)
   const [classes, setClasses] = useState<ClassificationClass[]>([
-    { min: 0, max: 20, color: '#0571b0', label: '(0) - (20)' },
-    { min: 20, max: 40, color: '#92c5de', label: '(20) - (40)' },
-    { min: 40, max: 60, color: '#f7f7f7', label: '(40) - (60)' },
-    { min: 60, max: 80, color: '#f4a582', label: '(60) - (80)' },
-    { min: 80, max: 100, color: '#ca0020', label: '(80) - (100)' }
+    { min: 0, max: 20, color: '#0571b0', label: '0 - 20' },
+    { min: 20, max: 40, color: '#92c5de', label: '20 - 40' },
+    { min: 40, max: 60, color: '#f7f7f7', label: '40 - 60' },
+    { min: 60, max: 80, color: '#f4a582', label: '60 - 80' },
+    { min: 80, max: 100, color: '#ca0020', label: '80 - 100' }
   ])
   const [previousConfigs, setPreviousConfigs] = useState<any[]>([])
 
@@ -98,7 +98,7 @@ export function SimpleRasterConfig({ file, onSave, onCancel }: SimpleRasterConfi
         ...cls,
         min,
         max,
-        label: `(${min}) - (${max})`
+        label: `${min} - ${max}`
       }
     })
     
@@ -145,7 +145,7 @@ export function SimpleRasterConfig({ file, onSave, onCancel }: SimpleRasterConfi
       newClasses[index] = { 
         ...newClasses[index], 
         [field]: numValue,
-        label: `(${newClasses[index].min}) - (${numValue})`
+        label: `${newClasses[index].min} - ${numValue}`
       }
       
       // If not the last class, update next class's min and label
@@ -154,7 +154,7 @@ export function SimpleRasterConfig({ file, onSave, onCancel }: SimpleRasterConfi
         newClasses[index + 1] = {
           ...newClasses[index + 1],
           min: nextMin,
-          label: `(${nextMin}) - (${newClasses[index + 1].max})`
+          label: `${nextMin} - ${newClasses[index + 1].max}`
         }
       }
       
