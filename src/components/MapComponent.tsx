@@ -372,14 +372,42 @@ export function MapComponent({
           console.error('Invalid GeoJSON data:', geojsonData)
           return
         }
+
+        // Log first feature for debugging
+        console.log('First feature geometry:', geojsonData.features[0]?.geometry)
+        console.log('First feature properties:', geojsonData.features[0]?.properties)
         
-        // Create vector source and layer
-        const boundarySource = new VectorSource({
-          features: new GeoJSON().readFeatures(geojsonData, {
+        // Create vector source and layer with more detailed error handling
+        let boundarySource: VectorSource
+        try {
+          const geojsonFormat = new GeoJSON()
+          console.log('Reading features with GeoJSON format...')
+          
+          const features = geojsonFormat.readFeatures(geojsonData, {
             featureProjection: 'EPSG:4326',
             dataProjection: 'EPSG:4326'
           })
-        })
+          
+          console.log('Features read successfully:', features.length)
+          
+          // Log feature details
+          if (features.length > 0) {
+            const firstFeature = features[0]
+            console.log('First feature geometry type:', firstFeature.getGeometry()?.getType())
+            console.log('First feature extent:', firstFeature.getGeometry()?.getExtent())
+            console.log('First feature properties:', firstFeature.getProperties())
+          }
+          
+          boundarySource = new VectorSource({
+            features: features
+          })
+          
+          console.log('Boundary source created with features:', boundarySource.getFeatures().length)
+          
+        } catch (error) {
+          console.error('Error reading GeoJSON features:', error)
+          return
+        }
         
         const featuresLoaded = boundarySource.getFeatures().length
         console.log('Created boundary source with features:', featuresLoaded)
@@ -393,13 +421,14 @@ export function MapComponent({
           source: boundarySource,
           style: new Style({
             stroke: new Stroke({
-              color: '#000000',
-              width: 2
+              color: '#FF0000', // Use red color for better visibility during testing
+              width: 3
             }),
             fill: new Fill({
-              color: 'rgba(255, 255, 255, 0)' // Transparent fill to show basemap
+              color: 'rgba(255, 0, 0, 0.1)' // Slight red fill for testing visibility
             })
-          })
+          }),
+          zIndex: 1000 // Ensure it's on top
         })
         
         // Set layer type for identification
@@ -411,6 +440,38 @@ export function MapComponent({
         map.addLayer(boundaryLayer)
         
         console.log('Added boundary layer to map. Total layers now:', map.getLayers().getLength())
+        
+        // Force a re-render to ensure the layer appears
+        map.renderSync()
+        
+        // Check if layer is visible
+        console.log('Boundary layer visible:', boundaryLayer.getVisible())
+        console.log('Boundary layer opacity:', boundaryLayer.getOpacity())
+        console.log('Boundary layer z-index:', boundaryLayer.getZIndex())
+        
+        // Get the extent of all features and log it
+        const extent = boundarySource.getExtent()
+        console.log('Boundary source extent:', extent)
+        console.log('Expected country bounds:', countryBounds[country as keyof typeof countryBounds])
+        
+        // Compare with expected bounds
+        const expectedBounds = countryBounds[country as keyof typeof countryBounds]
+        if (expectedBounds) {
+          console.log('Extent comparison:')
+          console.log('  Actual  :', `[${extent[0].toFixed(3)}, ${extent[1].toFixed(3)}, ${extent[2].toFixed(3)}, ${extent[3].toFixed(3)}]`)
+          console.log('  Expected:', `[${expectedBounds[0]}, ${expectedBounds[1]}, ${expectedBounds[2]}, ${expectedBounds[3]}]`)
+        }
+        
+        // Fit the view to show the boundary if it's the only country layer
+        if (extent && extent.every(coord => isFinite(coord))) {
+          console.log('Fitting view to boundary extent')
+          map.getView().fit(extent, {
+            padding: [20, 20, 20, 20],
+            duration: 1000
+          })
+        } else {
+          console.error('Invalid extent for boundary:', extent)
+        }
         
         // Add hover interaction for boundary features
         const hoverAttribute = countryBoundary.hoverAttribute
