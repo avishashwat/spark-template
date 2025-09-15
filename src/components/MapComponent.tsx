@@ -5,6 +5,7 @@ import XYZ from 'ol/source/XYZ'
 import { defaults as defaultControls, Zoom, ScaleLine } from 'ol/control'
 import { Download, ChartBar, Table, MapPin, CaretDown } from '@phosphor-icons/react'
 import { ChartView, TableView } from './DataVisualization'
+import { RasterLegend } from './RasterLegend'
 import 'ol/ol.css'
 
 interface MapComponentProps {
@@ -375,14 +376,6 @@ export function MapComponent({
             </div>
           )}
           
-          {/* Legend placeholder - only show in map mode */}
-          {overlayInfo && viewMode === 'map' && (
-            <div className="flex items-center gap-1 text-xs">
-              <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-red-500 rounded-sm"></div>
-              <span className="text-muted-foreground">Legend</span>
-            </div>
-          )}
-          
           {/* Download button */}
           <button
             onClick={handleDownload}
@@ -404,40 +397,34 @@ export function MapComponent({
             <div className="flex-1 relative">
               <div ref={mapRef} className="w-full h-full cursor-pointer" />
               
-              {/* North Arrow */}
-              <div className="absolute top-2 right-2 bg-white/90 border border-border rounded-lg p-2 shadow-sm north-arrow">
+              {/* Legend - positioned in top-left corner */}
+              {overlayInfo && (
+                <div className="absolute top-2 left-2 bg-white/95 border border-border rounded p-2 shadow-sm max-w-[180px] z-10 map-legend">
+                  <div className="text-xs font-medium text-foreground mb-2">{overlayInfo.name}</div>
+                  <RasterLegend overlayInfo={overlayInfo} />
+                </div>
+              )}
+              
+              {/* North Arrow - Smaller Design */}
+              <div className="absolute top-2 right-2 bg-white/90 border border-border rounded p-1 shadow-sm north-arrow">
                 <div className="flex flex-col items-center">
-                  <div className="w-6 h-6 flex items-center justify-center">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path 
-                        d="M12 2L14.5 8.5L12 7L9.5 8.5L12 2Z" 
-                        fill="#0072bc" 
-                        stroke="#0072bc" 
-                        strokeWidth="0.5"
-                      />
-                      <path 
-                        d="M12 22L14.5 15.5L12 17L9.5 15.5L12 22Z" 
-                        fill="white" 
-                        stroke="#0072bc" 
-                        strokeWidth="0.5"
-                      />
-                      <line 
-                        x1="12" 
-                        y1="2" 
-                        x2="12" 
-                        y2="22" 
-                        stroke="#0072bc" 
-                        strokeWidth="1"
-                      />
-                    </svg>
-                  </div>
-                  <span className="text-xs font-medium text-foreground mt-1">N</span>
+                  <svg width="12" height="16" viewBox="0 0 12 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path 
+                      d="M6 0L8 6L6 5L4 6L6 0Z" 
+                      fill="#0072bc"
+                    />
+                    <path 
+                      d="M6 16L8 10L6 11L4 10L6 16Z" 
+                      fill="#666"
+                    />
+                  </svg>
+                  <span className="text-[9px] font-medium text-foreground">N</span>
                 </div>
               </div>
             </div>
             
-            {/* Source and Disclaimer - only show when overlay is selected */}
-            {overlayInfo && (
+            {/* Source and Disclaimer - only show in single map view when overlay is selected */}
+            {overlayInfo && mapLayout === 1 && (
               <div className="bg-muted/50 border-t border-border px-3 py-2">
                 <div className="text-xs text-muted-foreground space-y-1 map-disclaimer">
                   <div>

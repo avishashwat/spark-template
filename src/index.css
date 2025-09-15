@@ -175,6 +175,14 @@
 .north-arrow {
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+  z-index: 10;
+}
+
+/* Legend styling */
+.map-legend {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 10;
 }
 
 /* Source and disclaimer text styling */

@@ -102,9 +102,16 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
   }
 
   const handleCategoryChange = (category: string) => {
-    setSelectedCategory(category)
-    setShowSelectionPanel(true)
-    resetSelections()
+    // If clicking the same category, toggle off
+    if (selectedCategory === category) {
+      setSelectedCategory('')
+      setShowSelectionPanel(false)
+      resetSelections()
+    } else {
+      setSelectedCategory(category)
+      setShowSelectionPanel(true)
+      resetSelections()
+    }
   }
 
   const addLayer = () => {
@@ -256,8 +263,9 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
                 <button 
                   className="text-muted-foreground hover:text-foreground p-1"
                   onClick={() => {
-                    setShowSelectionPanel(false)
                     setSelectedCategory('')
+                    setShowSelectionPanel(false)
+                    resetSelections()
                   }}
                 >
                   <X className="w-3 h-3" />

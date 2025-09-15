@@ -1,0 +1,125 @@
+import React from 'react'
+
+interface RasterLegendProps {
+  overlayInfo: {
+    type: string
+    name: string
+    scenario?: string
+    year?: string
+    season?: string
+  }
+}
+
+// Define color schemes for different data types
+const getColorScheme = (dataType: string) => {
+  // Climate variables - blue to red gradient
+  if (dataType.toLowerCase().includes('temp') || dataType.toLowerCase().includes('temperature')) {
+    return [
+      { color: '#0066cc', label: 'Low' },
+      { color: '#3399ff', label: 'Below Average' },
+      { color: '#ffcc00', label: 'Average' },
+      { color: '#ff6600', label: 'Above Average' },
+      { color: '#cc0000', label: 'High' }
+    ]
+  }
+  
+  // Precipitation - green to blue gradient
+  if (dataType.toLowerCase().includes('precip') || dataType.toLowerCase().includes('rainfall')) {
+    return [
+      { color: '#8B4513', label: 'Very Low' },
+      { color: '#DAA520', label: 'Low' },
+      { color: '#FFD700', label: 'Moderate' },
+      { color: '#32CD32', label: 'High' },
+      { color: '#0000CD', label: 'Very High' }
+    ]
+  }
+  
+  // Solar radiation - yellow to orange gradient
+  if (dataType.toLowerCase().includes('solar') || dataType.toLowerCase().includes('radiation')) {
+    return [
+      { color: '#FFFFE0', label: 'Very Low' },
+      { color: '#FFD700', label: 'Low' },
+      { color: '#FFA500', label: 'Moderate' },
+      { color: '#FF6347', label: 'High' },
+      { color: '#DC143C', label: 'Very High' }
+    ]
+  }
+  
+  // Flooding/Water hazards - blue gradient
+  if (dataType.toLowerCase().includes('flood')) {
+    return [
+      { color: '#E6F3FF', label: 'Very Low Risk' },
+      { color: '#99CCFF', label: 'Low Risk' },
+      { color: '#3399FF', label: 'Moderate Risk' },
+      { color: '#0066CC', label: 'High Risk' },
+      { color: '#003399', label: 'Very High Risk' }
+    ]
+  }
+  
+  // Drought - brown to red gradient
+  if (dataType.toLowerCase().includes('drought')) {
+    return [
+      { color: '#90EE90', label: 'No Risk' },
+      { color: '#FFFF99', label: 'Low Risk' },
+      { color: '#FFB347', label: 'Moderate Risk' },
+      { color: '#FF6B6B', label: 'High Risk' },
+      { color: '#8B0000', label: 'Extreme Risk' }
+    ]
+  }
+  
+  // Default color scheme
+  return [
+    { color: '#2563eb', label: '0-100' },
+    { color: '#3b82f6', label: '101-250' },
+    { color: '#60a5fa', label: '251-500' },
+    { color: '#93c5fd', label: '501-750' },
+    { color: '#dbeafe', label: '751-1000' }
+  ]
+}
+
+// Get appropriate data ranges based on the data type
+const getDataRanges = (dataType: string) => {
+  // For temperature data (likely in Celsius or Fahrenheit)
+  if (dataType.toLowerCase().includes('temp') || dataType.toLowerCase().includes('temperature')) {
+    return ['< 0°C', '0-10°C', '10-25°C', '25-35°C', '> 35°C']
+  }
+  
+  // For precipitation data (mm)
+  if (dataType.toLowerCase().includes('precip') || dataType.toLowerCase().includes('rainfall')) {
+    return ['0-50mm', '50-100mm', '100-200mm', '200-400mm', '> 400mm']
+  }
+  
+  // For solar radiation (MJ/m²/day or similar)
+  if (dataType.toLowerCase().includes('solar') || dataType.toLowerCase().includes('radiation')) {
+    return ['< 10', '10-15', '15-20', '20-25', '> 25']
+  }
+  
+  // For risk data (probability or index)
+  if (dataType.toLowerCase().includes('flood') || dataType.toLowerCase().includes('drought')) {
+    return ['0-20%', '20-40%', '40-60%', '60-80%', '80-100%']
+  }
+  
+  // Default ranges
+  return ['0-100', '101-250', '251-500', '501-750', '751-1000']
+}
+
+export function RasterLegend({ overlayInfo }: RasterLegendProps) {
+  const colorScheme = getColorScheme(overlayInfo.name)
+  const dataRanges = getDataRanges(overlayInfo.name)
+  
+  return (
+    <div className="space-y-1">
+      {colorScheme.map((item, index) => (
+        <div key={index} className="flex items-center gap-2">
+          <div 
+            className="w-3 h-3 rounded-sm border border-gray-300" 
+            style={{ backgroundColor: item.color }}
+          />
+          <span className="text-xs text-foreground">
+            {dataRanges[index] || item.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
