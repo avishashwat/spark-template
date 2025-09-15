@@ -81,13 +81,26 @@ export function RasterClassificationConfig({
     
     const newClassifications: ClassificationRange[] = []
     for (let i = 0; i < 5; i++) {
-      const min = stats.min + (classSize * i)
-      const max = i === 4 ? stats.max : stats.min + (classSize * (i + 1))
+      let min: number
+      let max: number
+      
+      if (i === 0) {
+        // First class: min is raster min
+        min = stats.min
+        max = Math.round((stats.min + classSize) * 100) / 100
+      } else if (i === 4) {
+        // Last class: max is raster max
+        min = Math.round((stats.min + (classSize * i)) * 100) / 100
+        max = stats.max
+      } else {
+        min = Math.round((stats.min + (classSize * i)) * 100) / 100
+        max = Math.round((stats.min + (classSize * (i + 1))) * 100) / 100
+      }
       
       newClassifications.push({
         id: crypto.randomUUID(),
-        min: Math.round(min * 100) / 100,
-        max: Math.round(max * 100) / 100,
+        min,
+        max,
         color: defaultColors[i],
         label: `Class ${i + 1}`
       })
@@ -96,12 +109,55 @@ export function RasterClassificationConfig({
     setClassifications(newClassifications)
   }
 
+  const getSmallestIncrement = (value: number): number => {
+    // Find the number of decimal places
+    const str = value.toString()
+    if (str.includes('.')) {
+      const decimals = str.split('.')[1].length
+      return Math.pow(10, -decimals)
+    }
+    return 1
+  }
+
   const updateClassification = (id: string, field: keyof ClassificationRange, value: any) => {
-    setClassifications(prev => 
-      prev.map(cls => 
-        cls.id === id ? { ...cls, [field]: value } : cls
+    if (field === 'max') {
+      const numValue = parseFloat(value)
+      
+      // Validate that max value is within raster bounds
+      if (!rasterStats) return
+      
+      if (numValue < rasterStats.min || numValue > rasterStats.max) {
+        toast.error(`Max value must be between ${rasterStats.min} and ${rasterStats.max}`)
+        return
+      }
+      
+      // When updating max value, automatically update next class's min
+      setClassifications(prev => {
+        const updated = prev.map(cls => 
+          cls.id === id ? { ...cls, [field]: numValue } : cls
+        )
+        
+        // Find current class index
+        const currentIndex = updated.findIndex(cls => cls.id === id)
+        
+        // If not the last class, update next class's min
+        if (currentIndex >= 0 && currentIndex < updated.length - 1) {
+          const nextMin = numValue + getSmallestIncrement(numValue)
+          updated[currentIndex + 1] = {
+            ...updated[currentIndex + 1],
+            min: nextMin
+          }
+        }
+        
+        return updated
+      })
+    } else {
+      setClassifications(prev => 
+        prev.map(cls => 
+          cls.id === id ? { ...cls, [field]: value } : cls
+        )
       )
-    )
+    }
   }
 
   const validateClassifications = () => {
@@ -110,20 +166,28 @@ export function RasterClassificationConfig({
     // Check that first class starts with min and last ends with max
     const sortedClasses = [...classifications].sort((a, b) => a.min - b.min)
     
-    if (sortedClasses[0].min !== rasterStats.min) {
+    if (Math.abs(sortedClasses[0].min - rasterStats.min) > 0.001) {
       toast.error('First class must start with the minimum value')
       return false
     }
     
-    if (sortedClasses[sortedClasses.length - 1].max !== rasterStats.max) {
+    if (Math.abs(sortedClasses[sortedClasses.length - 1].max - rasterStats.max) > 0.001) {
       toast.error('Last class must end with the maximum value')
       return false
     }
     
-    // Check for gaps or overlaps
+    // Check for logical sequence (each max should be less than or equal to next min)
     for (let i = 0; i < sortedClasses.length - 1; i++) {
-      if (sortedClasses[i].max !== sortedClasses[i + 1].min) {
-        toast.error('Classes must be continuous with no gaps or overlaps')
+      if (sortedClasses[i].max > sortedClasses[i + 1].min) {
+        toast.error(`Class ${i + 1} max value (${sortedClasses[i].max}) cannot be greater than Class ${i + 2} min value (${sortedClasses[i + 1].min})`)
+        return false
+      }
+    }
+    
+    // Check that all values are within raster bounds
+    for (let i = 0; i < sortedClasses.length; i++) {
+      if (sortedClasses[i].min < rasterStats.min || sortedClasses[i].max > rasterStats.max) {
+        toast.error(`All classification values must be between ${rasterStats.min} and ${rasterStats.max}`)
         return false
       }
     }
@@ -248,6 +312,21 @@ export function RasterClassificationConfig({
                   <h3 className="text-lg font-semibold">Classification Ranges</h3>
                 </div>
                 
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-start gap-3">
+                    <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-blue-800">
+                      <p className="font-medium mb-1">Automatic Classification Rules:</p>
+                      <ul className="space-y-1 text-blue-700">
+                        <li>• First class minimum is automatically set to raster minimum ({rasterStats?.min})</li>
+                        <li>• Last class maximum is automatically set to raster maximum ({rasterStats?.max})</li>
+                        <li>• When you enter a max value, the next class minimum auto-adjusts (e.g., 5.41 → 5.42)</li>
+                        <li>• You only need to enter 4 max values - minimums are calculated automatically</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                
                 <div className="space-y-4">
                   {classifications.map((cls, index) => (
                     <div key={cls.id} className="grid grid-cols-12 gap-3 items-center p-3 border rounded-lg">
@@ -261,7 +340,9 @@ export function RasterClassificationConfig({
                           value={cls.min}
                           onChange={(e) => updateClassification(cls.id, 'min', parseFloat(e.target.value))}
                           step="0.01"
-                          disabled={index === 0} // First min is fixed to raster min
+                          disabled={true} // All mins are auto-calculated
+                          className="bg-muted"
+                          placeholder="Auto-calculated"
                         />
                       </div>
                       
@@ -274,6 +355,8 @@ export function RasterClassificationConfig({
                           onChange={(e) => updateClassification(cls.id, 'max', parseFloat(e.target.value))}
                           step="0.01"
                           disabled={index === classifications.length - 1} // Last max is fixed to raster max
+                          className={index === classifications.length - 1 ? "bg-muted" : ""}
+                          placeholder={index === classifications.length - 1 ? "Auto-calculated" : "Enter max value"}
                         />
                       </div>
                       

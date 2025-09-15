@@ -77,13 +77,41 @@ export function SimpleRasterConfig({ file, onSave, onCancel }: SimpleRasterConfi
     const range = stats.max - stats.min
     const classWidth = range / 5
     
-    const newClasses = classes.map((cls, index) => ({
-      ...cls,
-      min: parseFloat((stats.min + (classWidth * index)).toFixed(2)),
-      max: parseFloat((stats.min + (classWidth * (index + 1))).toFixed(2))
-    }))
+    const newClasses = classes.map((cls, index) => {
+      let min: number
+      let max: number
+      
+      if (index === 0) {
+        // First class: min is raster min
+        min = stats.min
+        max = parseFloat((stats.min + classWidth).toFixed(2))
+      } else if (index === 4) {
+        // Last class: max is raster max
+        min = parseFloat((stats.min + (classWidth * index)).toFixed(2))
+        max = stats.max
+      } else {
+        min = parseFloat((stats.min + (classWidth * index)).toFixed(2))
+        max = parseFloat((stats.min + (classWidth * (index + 1))).toFixed(2))
+      }
+      
+      return {
+        ...cls,
+        min,
+        max
+      }
+    })
     
     setClasses(newClasses)
+  }
+
+  const getSmallestIncrement = (value: number): number => {
+    // Find the number of decimal places
+    const str = value.toString()
+    if (str.includes('.')) {
+      const decimals = str.split('.')[1].length
+      return Math.pow(10, -decimals)
+    }
+    return 1
   }
 
   const loadPreviousConfigs = async () => {
@@ -103,14 +131,42 @@ export function SimpleRasterConfig({ file, onSave, onCancel }: SimpleRasterConfi
   }
 
   const handleClassChange = (index: number, field: string, value: any) => {
-    const newClasses = [...classes]
-    newClasses[index] = { ...newClasses[index], [field]: value }
-    setClasses(newClasses)
+    if (field === 'max' && rasterStats) {
+      const numValue = parseFloat(value)
+      
+      // Validate that max value is within raster bounds
+      if (numValue < rasterStats.min || numValue > rasterStats.max) {
+        toast.error(`Max value must be between ${rasterStats.min} and ${rasterStats.max}`)
+        return
+      }
+      
+      const newClasses = [...classes]
+      newClasses[index] = { ...newClasses[index], [field]: numValue }
+      
+      // If not the last class, update next class's min
+      if (index < newClasses.length - 1) {
+        const nextMin = numValue + getSmallestIncrement(numValue)
+        newClasses[index + 1] = {
+          ...newClasses[index + 1],
+          min: nextMin
+        }
+      }
+      
+      setClasses(newClasses)
+    } else {
+      const newClasses = [...classes]
+      newClasses[index] = { ...newClasses[index], [field]: value }
+      setClasses(newClasses)
+    }
   }
 
   const handleSave = async () => {
     if (!rasterStats) {
       toast.error('Raster analysis not complete')
+      return
+    }
+
+    if (!validateClasses()) {
       return
     }
 
@@ -148,7 +204,30 @@ export function SimpleRasterConfig({ file, onSave, onCancel }: SimpleRasterConfi
     const firstClass = classes[0]
     const lastClass = classes[classes.length - 1]
     
-    return firstClass.min >= rasterStats.min && lastClass.max <= rasterStats.max
+    if (Math.abs(firstClass.min - rasterStats.min) > 0.001) {
+      toast.error('First class must start with the minimum value')
+      return false
+    }
+    
+    if (Math.abs(lastClass.max - rasterStats.max) > 0.001) {
+      toast.error('Last class must end with the maximum value')
+      return false
+    }
+    
+    // Check that all values are within raster bounds and logical sequence
+    for (let i = 0; i < classes.length; i++) {
+      if (classes[i].min < rasterStats.min || classes[i].max > rasterStats.max) {
+        toast.error(`All classification values must be between ${rasterStats.min} and ${rasterStats.max}`)
+        return false
+      }
+      
+      if (i < classes.length - 1 && classes[i].max > classes[i + 1].min) {
+        toast.error(`Class ${i + 1} max value cannot be greater than Class ${i + 2} min value`)
+        return false
+      }
+    }
+    
+    return true
   }
 
   return (
@@ -233,10 +312,26 @@ export function SimpleRasterConfig({ file, onSave, onCancel }: SimpleRasterConfi
                     Classification Classes
                   </CardTitle>
                   <CardDescription>
-                    Define value ranges and colors for data visualization
+                    Define value ranges and colors for data visualization. Min values are auto-calculated based on max values.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  {rasterStats && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                      <div className="flex items-start gap-2">
+                        <TrendUp className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <div className="text-xs text-blue-800">
+                          <p className="font-medium mb-1">Automatic Classification Rules:</p>
+                          <ul className="space-y-0.5 text-blue-700">
+                            <li>• First class minimum: {rasterStats.min} (raster minimum)</li>
+                            <li>• Last class maximum: {rasterStats.max} (raster maximum)</li>
+                            <li>• When you enter a max value, next min auto-adjusts (e.g., 5.41 → 5.42)</li>
+                            <li>• You only need to enter 4 max values - minimums are calculated automatically</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {classes.map((cls, index) => (
                     <div key={index} className="grid grid-cols-5 gap-3 items-center p-3 border rounded-lg">
                       <div className="space-y-1">
@@ -245,8 +340,10 @@ export function SimpleRasterConfig({ file, onSave, onCancel }: SimpleRasterConfi
                           type="number"
                           value={cls.min}
                           onChange={(e) => handleClassChange(index, 'min', parseFloat(e.target.value) || 0)}
-                          className="h-8 text-sm"
+                          className="h-8 text-sm bg-muted"
                           step="0.01"
+                          disabled={true}
+                          placeholder="Auto-calculated"
                         />
                       </div>
                       <div className="space-y-1">
@@ -255,8 +352,10 @@ export function SimpleRasterConfig({ file, onSave, onCancel }: SimpleRasterConfi
                           type="number"
                           value={cls.max}
                           onChange={(e) => handleClassChange(index, 'max', parseFloat(e.target.value) || 0)}
-                          className="h-8 text-sm"
+                          className={`h-8 text-sm ${index === classes.length - 1 ? 'bg-muted' : ''}`}
                           step="0.01"
+                          disabled={index === classes.length - 1}
+                          placeholder={index === classes.length - 1 ? "Auto-calculated" : "Enter max value"}
                         />
                       </div>
                       <div className="space-y-1">
