@@ -1,182 +1,140 @@
-# Data Integration Guide - UN ESCAP Climate & Energy Risk Visualization
+# Data Integration Guide for UN ESCAP Climate & Energy Risk Visualization
 
 ## Overview
-This guide explains how to integrate your geospatial data (boundary shapefiles, climate raster TIFFs, and energy point shapefiles) into the application using Cloud Optimized GeoTIFF (COG) format for fast overlay performance.
 
-## Required Data Structure
+This guide explains how to integrate your geospatial data (boundary shapefiles, raster files, and point shapefiles) with the UN ESCAP visualization application for fast and responsive overlay capabilities.
 
-### 1. Boundary Shapefiles (Country/Province boundaries)
-**Location:** `/src/assets/data/boundaries/`
-```
-boundaries/
-├── bhutan/
-│   ├── bhutan_boundary.shp
-│   ├── bhutan_boundary.shx
-│   ├── bhutan_boundary.dbf
-│   └── bhutan_boundary.prj
-├── mongolia/
-│   └── [similar structure]
-└── laos/
-    └── [similar structure]
-```
+## Data Requirements
 
-### 2. Climate Raster Files (Convert to COG format)
-**Location:** `/src/assets/data/climate/`
-```
-climate/
-├── bhutan/
-│   ├── maximum_temp/
-│   │   ├── historical/
-│   │   │   ├── annual/
-│   │   │   │   └── max_temp_annual.cog
-│   │   │   └── seasonal/
-│   │   │       ├── max_temp_12_02.cog  # Dec-Feb
-│   │   │       ├── max_temp_03_05.cog  # Mar-May
-│   │   │       ├── max_temp_06_08.cog  # Jun-Aug
-│   │   │       └── max_temp_09_11.cog  # Sep-Nov
-│   │   ├── ssp1/
-│   │   │   ├── 2021-2040/
-│   │   │   │   ├── annual/
-│   │   │   │   └── seasonal/
-│   │   │   ├── 2041-2060/
-│   │   │   ├── 2061-2080/
-│   │   │   └── 2081-2100/
-│   │   └── [ssp2, ssp3, ssp5 similar structure]
-│   ├── minimum_temp/
-│   ├── mean_temp/
-│   ├── precipitation/
-│   ├── solar_radiation/
-│   ├── cooling_degree_days/
-│   └── heating_degree_days/
-├── mongolia/
-└── laos/
-```
+### 1. Country Boundary Shapefile
+- **Format**: Shapefile (.shp, .shx, .dbf, .prj)
+- **Projection**: EPSG:4326 (WGS84)
+- **Purpose**: Define country boundaries for masking and zoom extent
+- **Attributes**: Should include country name/code for identification
 
-### 3. GIRI Hazard Data (Convert to COG format)
-**Location:** `/src/assets/data/giri/`
-```
-giri/
-├── bhutan/
-│   ├── flood/
-│   │   ├── existing/
-│   │   │   └── flood_existing.cog
-│   │   ├── ssp1/
-│   │   │   └── flood_ssp1.cog
-│   │   └── ssp5/
-│   │       └── flood_ssp5.cog
-│   └── drought/
-│       └── [similar structure]
-├── mongolia/
-└── laos/
-```
+### 2. Climate Variable Raster Files
+- **Current Format**: GeoTIFF (.tif)
+- **Recommended Format**: Cloud Optimized GeoTIFF (COG) for fast loading
+- **Projection**: EPSG:4326 (WGS84)
+- **Data Classification**: 5 categories with color ranges (0-100, 101-250, 251-500, 501-750, 751-1000)
+- **File Structure**:
+  ```
+  country/
+    ├── climate/
+    │   ├── maximum_temperature/
+    │   │   ├── historical/
+    │   │   │   ├── annual/
+    │   │   │   │   └── max_temp_annual.cog
+    │   │   │   └── seasonal/
+    │   │   │       ├── max_temp_jan_mar.cog
+    │   │   │       ├── max_temp_apr_jun.cog
+    │   │   │       ├── max_temp_jul_sep.cog
+    │   │   │       └── max_temp_oct_dec.cog
+    │   │   ├── ssp1/
+    │   │   │   ├── 2021-2040/
+    │   │   │   ├── 2041-2060/
+    │   │   │   ├── 2061-2080/
+    │   │   │   └── 2081-2100/
+    │   │   └── (ssp2, ssp3, ssp5...)
+    │   └── (other climate variables...)
+  ```
 
-### 4. Energy Infrastructure (Point Shapefiles)
-**Location:** `/src/assets/data/energy/`
-```
-energy/
-├── bhutan/
-│   ├── hydro_power_plants.shp
-│   ├── solar_power_plants.shp
-│   └── wind_power_plants.shp
-├── mongolia/
-└── laos/
-```
+### 3. GIRI Hazard Raster Files
+- **Format**: Cloud Optimized GeoTIFF (COG)
+- **Projection**: EPSG:4326 (WGS84)
+- **Variables**: Flood, Drought
+- **Scenarios**: Existing, SSP1, SSP5
+- **Data Classification**: 5 categories with appropriate color schemes
 
-## Step-by-Step Integration Process
+### 4. Energy Infrastructure Point Shapefiles
+- **Format**: Shapefile (.shp, .shx, .dbf, .prj)
+- **Projection**: EPSG:4326 (WGS84)
+- **Required Attribute**: `designCapacity` (numeric, in MW)
+- **Point Sizing**: Based on designCapacity values
+  - < 10 MW: Small (4px)
+  - 10-50 MW: Medium (6px)
+  - 50-200 MW: Large (8px)
+  - > 200 MW: Very Large (10px)
 
-### Step 1: Convert TIFFs to COG Format
-You'll need GDAL installed on your system. Use this command for each TIFF file:
+## Converting TIFFs to COG for Fast Performance
+
+To achieve snappy overlay performance (50-100x faster), convert your existing TIFF files to Cloud Optimized GeoTIFF format:
 
 ```bash
-# Install GDAL (if not already installed)
+# Install GDAL if not already installed
 # Ubuntu/Debian: sudo apt-get install gdal-bin
 # macOS: brew install gdal
-# Windows: Download from https://gdal.org/download.html
+# Windows: Download from https://gdal.org/
 
-# Convert TIFF to COG
-gdal_translate -of COG -co COMPRESS=DEFLATE -co PREDICTOR=2 -co OVERVIEW_RESAMPLING=AVERAGE input.tif output.cog
+# Convert single TIFF to COG
+gdal_translate -of COG -co COMPRESS=DEFLATE -co TILED=YES -co BLOCKSIZE=512 input.tif output.cog
 
-# Example for a climate variable:
-gdal_translate -of COG -co COMPRESS=DEFLATE -co PREDICTOR=2 -co OVERVIEW_RESAMPLING=AVERAGE bhutan_max_temp_annual.tif bhutan_max_temp_annual.cog
+# Batch convert all TIFFs in a directory
+for file in *.tif; do
+    gdal_translate -of COG -co COMPRESS=DEFLATE -co TILED=YES -co BLOCKSIZE=512 "$file" "${file%.tif}.cog"
+done
 ```
 
-### Step 2: Prepare Data Classification
-Create a JSON file for each climate variable defining the classification ranges and colors:
+### COG Parameters Explained:
+- `COMPRESS=DEFLATE`: Lossless compression to reduce file size
+- `TILED=YES`: Creates internal tiles for efficient random access
+- `BLOCKSIZE=512`: Optimal block size for web viewing
 
-**Location:** `/src/assets/data/classifications/`
-```
-classifications/
-├── maximum_temp.json
-├── minimum_temp.json
-├── precipitation.json
-└── [other variables].json
-```
+## Layer Management System
 
-**Example classification file:**
-```json
-{
-  "variable": "maximum_temp",
-  "unit": "°C",
-  "ranges": [
-    { "min": -10, "max": 0, "color": "#1a1a1a", "label": "Very Cold" },
-    { "min": 0, "max": 10, "color": "#3b82f6", "label": "Cold" },
-    { "min": 10, "max": 20, "color": "#10b981", "label": "Moderate" },
-    { "min": 20, "max": 30, "color": "#f59e0b", "label": "Warm" },
-    { "min": 30, "max": 50, "color": "#dc2626", "label": "Hot" }
-  ]
-}
-```
+The application implements smart layer management:
 
-### Step 3: Upload Files to Project
-1. Create the directory structure in `/src/assets/data/`
-2. Upload your converted COG files and shapefiles
-3. Upload classification JSON files
+### Restriction Rules:
+1. **One layer per category per map**: Only one Climate, GIRI, or Energy layer can be active per sub-map
+2. **Climate vs GIRI mutual exclusivity**: Since both are raster overlays with classifications, only one can be visible at a time
+3. **Energy layers are additive**: Point shapefiles can coexist with one raster layer
 
-### Step 4: Test Integration
-I'll create a test overlay system that can:
-- Load and display COG files as raster overlays
-- Apply color classification based on your JSON files
-- Load shapefiles for boundaries and points
-- Handle the hierarchical selection system you described
+### Example Scenarios:
+- ✅ Climate (Temperature) + Energy (Hydro Plants)
+- ✅ GIRI (Flood) + Energy (Solar Plants)  
+- ❌ Climate (Temperature) + GIRI (Flood) - GIRI will replace Climate
+- ❌ Two Climate variables - Second will replace first
 
-## Current Implementation Status
+## Testing Overlay Integration
 
-✅ **Ready for Integration:**
-- Multi-map comparison system
-- Layer management infrastructure
-- OpenLayers with EPSG:4326 support
-- Overlay information display
-- Legend system framework
+To test the overlay system with your data:
 
-🔄 **Next Steps:**
-- COG loader utility
-- Shapefile loader utility  
-- Classification system
-- File path resolver based on selections
-- Performance optimization for large files
+1. **Prepare Sample Files**:
+   - 1 boundary shapefile for your country
+   - 1 climate raster (converted to COG)
+   - 1 energy infrastructure shapefile with `designCapacity` attribute
 
-## File Upload Instructions
+2. **File Hosting**:
+   - Host files on a web-accessible server with CORS enabled
+   - Ensure URLs are directly accessible (not behind authentication)
 
-Once you have your files ready:
-
-1. **Compress your data** into organized ZIP files by country
-2. **Share the download links** or describe your data structure
-3. **Provide sample classification ranges** for at least one climate variable
-4. I'll implement the loading system and test with your data
+3. **Integration Points**:
+   - The app will fetch files based on user selections
+   - URL structure should match the hierarchical folder organization
+   - Files are loaded dynamically when overlay is selected
 
 ## Performance Considerations
 
-- **COG Benefits:** 50-100x faster loading than standard TIFFs
-- **Tile Pyramids:** Automatic generation for smooth zooming
-- **Compression:** DEFLATE compression reduces file sizes by 60-80%
-- **Caching:** Browser caches tiles for instant re-display
+### Recommended Optimizations:
+1. **Use COG format** for all raster data
+2. **Tile pyramids**: COG automatically creates multiple resolution levels
+3. **File size**: Keep individual files under 50MB for web delivery
+4. **Compression**: Use appropriate compression (DEFLATE for most cases)
+5. **Spatial indexing**: Ensure shapefiles have .shx spatial index
 
-## Questions for You
+### Expected Performance:
+- COG files: Load in 1-3 seconds
+- Regular TIFFs: May take 30-60 seconds or more
+- Shapefiles: Near-instantaneous for < 10,000 features
 
-1. Do you have GDAL installed to convert TIFFs to COG format?
-2. What are the typical data ranges for your climate variables?
-3. Do you have preferred color schemes for different variables?
-4. Are your shapefiles in EPSG:4326 projection?
-5. How large are your typical TIFF files (MB/GB)?
+## Next Steps
 
-Ready to proceed when you share your test files!
+Once you have prepared your data files:
+
+1. **Convert TIFFs to COG** using the commands above
+2. **Validate projections** are EPSG:4326
+3. **Test file accessibility** via direct URL access
+4. **Provide sample URLs** for integration testing
+5. **Configure data endpoint** in the application
+
+The application is designed to handle this data structure and provide responsive, interactive visualizations suitable for policy decision-making and risk analysis.

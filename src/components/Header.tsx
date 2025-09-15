@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Globe, MapPin, ChartBar } from '@phosphor-icons/react'
+import { Globe, MapPin, ChartBar, Sidebar as SidebarIcon } from '@phosphor-icons/react'
 
 interface HeaderProps {
   selectedCountry: string
@@ -14,6 +14,8 @@ interface HeaderProps {
   onToggleDashboard: () => void
   basemap: string
   onBasemapChange: (basemap: string) => void
+  showSidebar: boolean
+  onToggleSidebar: () => void
 }
 
 const countries = [
@@ -43,7 +45,9 @@ export function Header({
   showDashboard,
   onToggleDashboard,
   basemap,
-  onBasemapChange
+  onBasemapChange,
+  showSidebar,
+  onToggleSidebar
 }: HeaderProps) {
   return (
     <Card className="rounded-none border-x-0 border-t-0 bg-background/80 backdrop-blur-sm">
@@ -79,6 +83,16 @@ export function Header({
         </div>
 
         <div className="flex items-center gap-4">
+          <Button
+            variant={showSidebar ? "default" : "outline"}
+            size="sm"
+            onClick={onToggleSidebar}
+            className="flex items-center gap-2 h-7 px-2 text-xs"
+          >
+            <SidebarIcon className="w-4 h-4" />
+            Layers
+          </Button>
+          
           <div className="flex items-center gap-2">
             <MapPin className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm text-muted-foreground">Compare:</span>

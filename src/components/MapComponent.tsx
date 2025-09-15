@@ -6,6 +6,7 @@ import { defaults as defaultControls, Zoom, ScaleLine } from 'ol/control'
 import { Download, ChartBar, Table, MapPin, CaretDown } from '@phosphor-icons/react'
 import { ChartView, TableView } from './DataVisualization'
 import { RasterLegend } from './RasterLegend'
+import { EnergyLegend } from './EnergyLegend'
 import { toast } from 'sonner'
 import 'ol/ol.css'
 
@@ -545,7 +546,11 @@ export function MapComponent({
               {overlayInfo && (
                 <div className="absolute top-2 left-2 bg-white/95 border border-border rounded p-2 shadow-sm max-w-[180px] z-10 map-legend">
                   <div className="text-xs font-medium text-foreground mb-2">{overlayInfo.name}</div>
-                  <RasterLegend overlayInfo={overlayInfo} />
+                  {overlayInfo.type === 'Energy' ? (
+                    <EnergyLegend energyType={overlayInfo.name} />
+                  ) : (
+                    <RasterLegend overlayInfo={overlayInfo} />
+                  )}
                 </div>
               )}
               

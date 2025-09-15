@@ -81,6 +81,16 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
     resetSelections()
   }, [mapLayout])
 
+  // Track active layers by category for current map
+  const getActiveLayersByCategory = () => {
+    return activeLayers.reduce((acc, layer) => {
+      if (layer.id.startsWith(activeMapId)) {
+        acc[layer.category] = layer
+      }
+      return acc
+    }, {} as Record<string, LayerConfig>)
+  }
+
   const resetSelections = () => {
     setClimateVariable('')
     setScenario('')
@@ -94,14 +104,10 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
   }
 
   const handleCategoryChange = (category: string) => {
-    // If clicking the same category that's already selected, just reset
-    if (selectedCategory === category && showSelectionPanel) {
-      resetSelections()
-    } else {
-      setSelectedCategory(category)
-      setShowSelectionPanel(true)
-      resetSelections()
-    }
+    // Always show the selection panel when a category is clicked
+    setSelectedCategory(category)
+    setShowSelectionPanel(true)
+    resetSelections()
   }
 
   const addLayer = () => {
@@ -129,6 +135,43 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
     }
 
     if (layerInfo) {
+      const activeLayersByCategory = getActiveLayersByCategory()
+      
+      // Remove existing layers based on rules:
+      // 1. Only one layer per category
+      // 2. Climate and GIRI are mutually exclusive (both are raster overlays)
+      let layersToRemove: string[] = []
+      
+      if (selectedCategory === 'climate') {
+        // Remove existing climate layer
+        if (activeLayersByCategory.climate) {
+          layersToRemove.push(activeLayersByCategory.climate.id)
+        }
+        // Remove existing GIRI layer (mutually exclusive)
+        if (activeLayersByCategory.giri) {
+          layersToRemove.push(activeLayersByCategory.giri.id)
+        }
+      } else if (selectedCategory === 'giri') {
+        // Remove existing GIRI layer
+        if (activeLayersByCategory.giri) {
+          layersToRemove.push(activeLayersByCategory.giri.id)
+        }
+        // Remove existing climate layer (mutually exclusive)
+        if (activeLayersByCategory.climate) {
+          layersToRemove.push(activeLayersByCategory.climate.id)
+        }
+      } else if (selectedCategory === 'energy') {
+        // Remove existing energy layer
+        if (activeLayersByCategory.energy) {
+          layersToRemove.push(activeLayersByCategory.energy.id)
+        }
+      }
+      
+      // Remove conflicting layers
+      if (layersToRemove.length > 0) {
+        setActiveLayers(prev => prev.filter(layer => !layersToRemove.includes(layer.id)))
+      }
+
       const newLayer: LayerConfig = {
         id: `${activeMapId}-${Date.now()}`,
         name: layerInfo.name,
@@ -137,10 +180,10 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
         opacity: 80
       }
       
-      setActiveLayers([...activeLayers, newLayer])
+      setActiveLayers(prev => [...prev.filter(layer => !layersToRemove.includes(layer.id)), newLayer])
       onLayerChange(activeMapId, layerInfo)
       
-      // Keep the selection panel open but reset selections for easy re-use
+      // Keep selection panel open and reset selections for easy re-use
       resetSelections()
     }
   }
@@ -183,6 +226,11 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
     return false
   }
 
+  // Get active layers for the current map only
+  const getCurrentMapLayers = () => {
+    return activeLayers.filter(layer => layer.id.startsWith(activeMapId))
+  }
+
   return (
     <>
       <Card className="h-full rounded-none border-y-0 border-l-0">
@@ -193,11 +241,11 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
           </CardTitle>
         </CardHeader>
         
-        <CardContent className="space-y-3 custom-scroll overflow-y-auto max-h-[calc(100vh-120px)] px-4">
+        <CardContent className="space-y-2 custom-scroll overflow-y-auto max-h-[calc(100vh-120px)] px-4">
           {/* Data Categories */}
           <div className="space-y-2">
             <h3 className="font-medium text-xs text-muted-foreground">DATA LAYERS</h3>
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               {[
                 { id: 'climate', label: 'Climate Variables', icon: Thermometer, color: 'text-orange-600' },
                 { id: 'giri', label: 'GIRI Hazards', icon: Drop, color: 'text-blue-600' },
@@ -205,15 +253,15 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
               ].map(({ id, label, icon: Icon, color }) => (
                 <button
                   key={id}
-                  className={`flex items-center justify-start w-full h-10 text-sm px-3 border-2 rounded-md transition-all duration-200 hover:bg-primary/5 hover:border-primary/50 ${
+                  className={`flex items-center justify-start w-full h-8 text-xs px-2 border-2 rounded-md transition-all duration-200 hover:bg-primary/5 hover:border-primary/50 ${
                     selectedCategory === id ? 'bg-primary/15 border-primary text-primary font-medium' : 'bg-white border-border text-foreground'
                   }`}
                   onClick={() => handleCategoryChange(id)}
                 >
-                  <Icon className={`w-4 h-4 mr-2 ${selectedCategory === id ? 'text-primary' : color}`} />
+                  <Icon className={`w-3 h-3 mr-2 ${selectedCategory === id ? 'text-primary' : color}`} />
                   {label}
                   {selectedCategory === id && (
-                    <Badge variant="secondary" className="ml-auto text-xs">
+                    <Badge variant="secondary" className="ml-auto text-xs h-4 px-1">
                       Active
                     </Badge>
                   )}
@@ -223,25 +271,25 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
           </div>
 
           {/* Selection Panel - Show when category is selected */}
-          {selectedCategory && (
-            <div className="space-y-3 border-2 rounded-lg p-4 bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/40 shadow-md relative z-10 animate-in slide-in-from-top-2 duration-200">
+          {selectedCategory && showSelectionPanel && (
+            <div className="space-y-2 border-2 rounded-lg p-3 bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/40 shadow-md relative z-10 animate-in slide-in-from-top-2 duration-200">
               <div className="flex items-center justify-between">
-                <h4 className="font-semibold text-sm text-primary flex items-center gap-2">
+                <h4 className="font-semibold text-xs text-primary flex items-center gap-2">
                   {selectedCategory === 'climate' && (
                     <>
-                      <Thermometer className="w-4 h-4" />
+                      <Thermometer className="w-3 h-3" />
                       Configure Climate Variables
                     </>
                   )}
                   {selectedCategory === 'giri' && (
                     <>
-                      <Drop className="w-4 h-4" />
+                      <Drop className="w-3 h-3" />
                       Configure GIRI Hazards
                     </>
                   )}
                   {selectedCategory === 'energy' && (
                     <>
-                      <Flashlight className="w-4 h-4" />
+                      <Flashlight className="w-3 h-3" />
                       Configure Energy Infrastructure
                     </>
                   )}
@@ -249,11 +297,13 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
                 <button
                   className="text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted transition-colors"
                   onClick={() => {
+                    setShowSelectionPanel(false)
+                    setSelectedCategory('')
                     resetSelections()
                   }}
-                  title="Clear selections"
+                  title="Close selection panel"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3 h-3" />
                 </button>
               </div>
               
@@ -263,12 +313,12 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
                   <div className="space-y-1">
                     <label className="text-xs font-medium text-muted-foreground">Variable</label>
                     <Select value={climateVariable} onValueChange={setClimateVariable}>
-                      <SelectTrigger className="h-8 text-sm">
+                      <SelectTrigger className="h-7 text-xs">
                         <SelectValue placeholder="Select variable" />
                       </SelectTrigger>
                       <SelectContent>
                         {climateVariables.map(variable => (
-                          <SelectItem key={variable} value={variable} className="text-sm">
+                          <SelectItem key={variable} value={variable} className="text-xs">
                             {variable}
                           </SelectItem>
                         ))}
@@ -280,12 +330,12 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-muted-foreground">Scenario</label>
                       <Select value={scenario} onValueChange={setScenario}>
-                        <SelectTrigger className="h-8 text-sm">
+                        <SelectTrigger className="h-7 text-xs">
                           <SelectValue placeholder="Select scenario" />
                         </SelectTrigger>
                         <SelectContent>
                           {scenarios.map(s => (
-                            <SelectItem key={s} value={s} className="text-sm">
+                            <SelectItem key={s} value={s} className="text-xs">
                               {s}
                             </SelectItem>
                           ))}
@@ -298,12 +348,12 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-muted-foreground">Year Range</label>
                       <Select value={yearRange} onValueChange={setYearRange}>
-                        <SelectTrigger className="h-8 text-sm">
+                        <SelectTrigger className="h-7 text-xs">
                           <SelectValue placeholder="Select year range" />
                         </SelectTrigger>
                         <SelectContent>
                           {yearRanges.map(range => (
-                            <SelectItem key={range} value={range} className="text-sm">
+                            <SelectItem key={range} value={range} className="text-xs">
                               {range}
                             </SelectItem>
                           ))}
@@ -316,12 +366,12 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-muted-foreground">Seasonality</label>
                       <Select value={seasonalityType} onValueChange={setSeasonalityType}>
-                        <SelectTrigger className="h-8 text-sm">
+                        <SelectTrigger className="h-7 text-xs">
                           <SelectValue placeholder="Select seasonality" />
                         </SelectTrigger>
                         <SelectContent>
                           {seasonality.map(s => (
-                            <SelectItem key={s} value={s} className="text-sm">
+                            <SelectItem key={s} value={s} className="text-xs">
                               {s}
                             </SelectItem>
                           ))}
@@ -334,14 +384,14 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-muted-foreground">Season</label>
                       <Select value={season} onValueChange={setSeason}>
-                        <SelectTrigger className="h-8 text-sm">
+                        <SelectTrigger className="h-7 text-xs">
                           <SelectValue placeholder="Select season" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="jan_mar" className="text-sm">January - March</SelectItem>
-                          <SelectItem value="apr_jun" className="text-sm">April - June</SelectItem>
-                          <SelectItem value="jul_sep" className="text-sm">July - September</SelectItem>
-                          <SelectItem value="oct_dec" className="text-sm">October - December</SelectItem>
+                          <SelectItem value="jan_mar" className="text-xs">January - March</SelectItem>
+                          <SelectItem value="apr_jun" className="text-xs">April - June</SelectItem>
+                          <SelectItem value="jul_sep" className="text-xs">July - September</SelectItem>
+                          <SelectItem value="oct_dec" className="text-xs">October - December</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -355,12 +405,12 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
                   <div className="space-y-1">
                     <label className="text-xs font-medium text-muted-foreground">Variable</label>
                     <Select value={giriVariable} onValueChange={setGiriVariable}>
-                      <SelectTrigger className="h-8 text-sm">
+                      <SelectTrigger className="h-7 text-xs">
                         <SelectValue placeholder="Select variable" />
                       </SelectTrigger>
                       <SelectContent>
                         {giriVariables.map(variable => (
-                          <SelectItem key={variable} value={variable} className="text-sm">
+                          <SelectItem key={variable} value={variable} className="text-xs">
                             {variable}
                           </SelectItem>
                         ))}
@@ -372,12 +422,12 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-muted-foreground">Scenario</label>
                       <Select value={giriScenario} onValueChange={setGiriScenario}>
-                        <SelectTrigger className="h-8 text-sm">
+                        <SelectTrigger className="h-7 text-xs">
                           <SelectValue placeholder="Select scenario" />
                         </SelectTrigger>
                         <SelectContent>
                           {giriScenarios.map(s => (
-                            <SelectItem key={s} value={s} className="text-sm">
+                            <SelectItem key={s} value={s} className="text-xs">
                               {s}
                             </SelectItem>
                           ))}
@@ -393,12 +443,12 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">Infrastructure Type</label>
                   <Select value={energyType} onValueChange={setEnergyType}>
-                    <SelectTrigger className="h-8 text-sm">
+                    <SelectTrigger className="h-7 text-xs">
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
                       {energyInfrastructure.map(type => (
-                        <SelectItem key={type} value={type} className="text-sm">
+                        <SelectItem key={type} value={type} className="text-xs">
                           {type}
                         </SelectItem>
                       ))}
@@ -410,7 +460,7 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
               <button 
                 onClick={addLayer}
                 disabled={!canAddLayer()}
-                className="w-full h-8 text-sm bg-primary text-primary-foreground rounded px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors flex items-center justify-center gap-1"
+                className="w-full h-7 text-xs bg-primary text-primary-foreground rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors flex items-center justify-center gap-1"
               >
                 <Plus className="w-3 h-3" />
                 Add Layer
@@ -419,13 +469,13 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
           )}
 
           {/* Active Layers */}
-          {activeLayers.length > 0 && (
+          {getCurrentMapLayers().length > 0 && (
             <>
-              <Separator className="my-3" />
+              <Separator className="my-2" />
               <div className="space-y-2">
-                <h3 className="font-medium text-xs text-muted-foreground">ACTIVE LAYERS</h3>
-                <div className="space-y-2">
-                  {activeLayers.map(layer => (
+                <h3 className="font-medium text-xs text-muted-foreground">ACTIVE LAYERS ({activeMapId.toUpperCase()})</h3>
+                <div className="space-y-1.5">
+                  {getCurrentMapLayers().map(layer => (
                     <div key={layer.id} className="bg-muted/30 rounded-md p-2 space-y-2">
                       <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">

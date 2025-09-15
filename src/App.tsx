@@ -28,6 +28,7 @@ function App() {
   const [selectedCountry, setSelectedCountry] = useState('bhutan')
   const [mapLayout, setMapLayout] = useState(1)
   const [showDashboard, setShowDashboard] = useState(false)
+  const [showSidebar, setShowSidebar] = useState(true) // Add sidebar toggle
   const [activeMapId, setActiveMapId] = useState('map-1')
   const [basemap, setBasemap] = useState('osm')
   const [sharedView, setSharedView] = useState<{ center: [number, number], zoom: number }>({
@@ -181,17 +182,21 @@ function App() {
         onToggleDashboard={() => setShowDashboard(!showDashboard)}
         basemap={basemap}
         onBasemapChange={handleBasemapChange}
+        showSidebar={showSidebar}
+        onToggleSidebar={() => setShowSidebar(!showSidebar)}
       />
       
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
-        <div className="w-80 flex-shrink-0">
-          <Sidebar
-            activeMapId={activeMapId}
-            onLayerChange={handleLayerChange}
-            mapLayout={mapLayout} // Pass layout to clear layers on change
-          />
-        </div>
+        {showSidebar && (
+          <div className="w-80 flex-shrink-0">
+            <Sidebar
+              activeMapId={activeMapId}
+              onLayerChange={handleLayerChange}
+              mapLayout={mapLayout} // Pass layout to clear layers on change
+            />
+          </div>
+        )}
         
         {/* Main Map Area */}
         <div className="flex-1 p-2">
