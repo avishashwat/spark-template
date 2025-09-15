@@ -861,19 +861,17 @@ export function MapComponent({
                             provinceMaskLayer.set('layerType', 'provinceMask')
                             layers.insertAt(layers.getLength(), provinceMaskLayer)
                             
-                            // Add the province feature itself with completely opaque fill
+                            // Add the province feature itself with no fill (transparent)
                             const provinceLayer = new VectorLayer({
                               source: new VectorSource({
                                 features: [feature.clone()]
                               }),
                               style: new Style({
-                                fill: new Fill({
-                                  color: 'rgba(255, 255, 255, 1.0)'  // Completely opaque white
-                                }),
                                 stroke: new Stroke({
                                   color: '#0072bc',
                                   width: 2
                                 })
+                                // No fill - province will be completely transparent
                               }),
                               zIndex: 999  // Higher z-index to appear above mask
                             })
