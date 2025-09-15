@@ -18,7 +18,7 @@ interface LayerConfig {
 
 interface SidebarProps {
   activeMapId: string
-  onLayerChange: (mapId: string, layer: LayerConfig) => void
+  onLayerChange: (mapId: string, layer: LayerConfig | null) => void
   basemap: string
   onBasemapChange: (basemap: string) => void
 }
@@ -106,34 +106,40 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
   }
 
   const addLayer = () => {
-    let layerName = ''
-    let category: 'climate' | 'giri' | 'energy' = 'climate'
+    let layerInfo: any = null
     
     if (selectedCategory === 'climate' && climateVariable && scenario) {
-      layerName = `${climateVariable} - ${scenario}`
-      if (seasonalityType) layerName += ` - ${seasonalityType}`
-      if (yearRange) layerName += ` - ${yearRange}`
-      if (season) layerName += ` - ${season}`
-      category = 'climate'
+      layerInfo = {
+        type: 'Climate',
+        name: climateVariable,
+        scenario: scenario,
+        year: yearRange || undefined,
+        season: season || (seasonalityType === 'Annual' ? 'Annual' : undefined)
+      }
     } else if (selectedCategory === 'giri' && giriVariable && giriScenario) {
-      layerName = `${giriVariable} - ${giriScenario}`
-      category = 'giri'
+      layerInfo = {
+        type: 'GIRI',
+        name: giriVariable,
+        scenario: giriScenario
+      }
     } else if (selectedCategory === 'energy' && energyType) {
-      layerName = energyType
-      category = 'energy'
+      layerInfo = {
+        type: 'Energy',
+        name: energyType
+      }
     }
 
-    if (layerName) {
+    if (layerInfo) {
       const newLayer: LayerConfig = {
         id: `${activeMapId}-${Date.now()}`,
-        name: layerName,
-        category,
+        name: layerInfo.name,
+        category: selectedCategory as 'climate' | 'giri' | 'energy',
         visible: true,
         opacity: 80
       }
       
       setActiveLayers([...activeLayers, newLayer])
-      onLayerChange(activeMapId, newLayer)
+      onLayerChange(activeMapId, layerInfo)
     }
   }
 
@@ -159,6 +165,7 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
 
   const removeLayer = (layerId: string) => {
     setActiveLayers(prev => prev.filter(layer => layer.id !== layerId))
+    onLayerChange(activeMapId, null) // Clear overlay
   }
 
   const canAddLayer = () => {

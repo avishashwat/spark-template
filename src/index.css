@@ -84,21 +84,28 @@
   left: 10px;
 }
 
+.ol-scale-line {
+  bottom: 10px;
+  left: 10px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.ol-scale-line-inner {
+  border: 1px solid var(--foreground);
+  border-top: none;
+  color: var(--foreground);
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  margin: 1px;
+  text-align: center;
+}
+
 .ol-attribution {
   bottom: 4px;
   right: 4px;
   font-size: 10px;
-}
-
-/* Map container styles */
-.map-container {
-  position: relative;
-  border: 2px solid transparent;
-  transition: border-color 0.2s ease;
-}
-
-.map-container.active {
-  border-color: var(--primary);
 }
 
 /* Custom scrollbar for panels */

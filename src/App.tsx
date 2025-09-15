@@ -10,6 +10,13 @@ interface MapInstance {
   center: [number, number]
   zoom: number
   layers: any[]
+  overlayInfo?: {
+    type: string
+    name: string
+    scenario?: string
+    year?: string
+    season?: string
+  }
 }
 
 function App() {
@@ -22,9 +29,15 @@ function App() {
     center: [90.433601, 27.514162], // Bhutan center
     zoom: 6
   })
+  
+  // Store overlay information for each map
+  const [mapOverlays, setMapOverlays] = useState<Record<string, any>>({})
 
   const handleCountryChange = useCallback((country: string) => {
     setSelectedCountry(country)
+    
+    // Clear overlays when changing country
+    setMapOverlays({})
     
     // Update shared view based on country
     const countryBounds = {
@@ -40,6 +53,8 @@ function App() {
   const handleLayoutChange = useCallback((layout: number) => {
     setMapLayout(layout)
     setActiveMapId('map-1') // Reset to first map when layout changes
+    // Clear overlays when changing layout
+    setMapOverlays({})
   }, [])
 
   const handleMapActivate = useCallback((mapId: string) => {
@@ -53,6 +68,27 @@ function App() {
   const handleLayerChange = useCallback((mapId: string, layer: any) => {
     // Handle layer changes for specific map
     console.log('Layer change for map:', mapId, layer)
+    
+    // Update overlay info for the specific map
+    if (layer) {
+      setMapOverlays(prev => ({
+        ...prev,
+        [mapId]: {
+          type: layer.type || 'Unknown',
+          name: layer.name || 'Unknown Layer',
+          scenario: layer.scenario,
+          year: layer.year,
+          season: layer.season
+        }
+      }))
+    } else {
+      // Remove overlay when layer is cleared
+      setMapOverlays(prev => {
+        const updated = { ...prev }
+        delete updated[mapId]
+        return updated
+      })
+    }
   }, [])
 
   const handleBasemapChange = useCallback((newBasemap: string) => {
@@ -66,7 +102,7 @@ function App() {
     for (let i = 0; i < mapLayout; i++) {
       const mapId = mapIds[i]
       maps.push(
-        <div key={mapId} className="relative">
+        <div key={mapId} className="h-full">
           <MapComponent
             id={mapId}
             isActive={activeMapId === mapId}
@@ -76,6 +112,7 @@ function App() {
             onViewChange={handleViewChange}
             country={selectedCountry}
             basemap={basemap}
+            overlayInfo={mapOverlays[mapId]}
           />
         </div>
       )
@@ -120,8 +157,8 @@ function App() {
         </div>
         
         {/* Main Map Area */}
-        <div className="flex-1 p-0">
-          <div className={`grid ${getMapGridClass()} h-full gap-1`}>
+        <div className="flex-1 p-2">
+          <div className={`grid ${getMapGridClass()} h-full gap-2`}>
             {renderMaps()}
           </div>
         </div>

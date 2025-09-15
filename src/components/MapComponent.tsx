@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Map as OLMap, View } from 'ol'
 import TileLayer from 'ol/layer/Tile'
 import XYZ from 'ol/source/XYZ'
-import { defaults as defaultControls, Zoom } from 'ol/control'
+import { defaults as defaultControls, Zoom, ScaleLine } from 'ol/control'
+import { Download } from '@phosphor-icons/react'
 import 'ol/ol.css'
 
 interface MapComponentProps {
@@ -14,6 +15,13 @@ interface MapComponentProps {
   onViewChange: (center: [number, number], zoom: number) => void
   country: string
   basemap?: string
+  overlayInfo?: {
+    type: string
+    name: string
+    scenario?: string
+    year?: string
+    season?: string
+  }
 }
 
 const basemapSources = {
@@ -54,7 +62,8 @@ export function MapComponent({
   zoom, 
   onViewChange,
   country,
-  basemap = 'osm'
+  basemap = 'osm',
+  overlayInfo
 }: MapComponentProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<OLMap | null>(null)
@@ -88,6 +97,12 @@ export function MapComponent({
       controls: defaultControls().extend([
         new Zoom({
           className: 'ol-zoom',
+        }),
+        new ScaleLine({
+          className: 'ol-scale-line',
+          bar: true,
+          text: true,
+          minWidth: 100,
         }),
       ]),
     })
@@ -169,17 +184,112 @@ export function MapComponent({
     layers.insertAt(0, basemapLayer)
   }, [basemap])
 
+  const handleDownload = () => {
+    if (!mapInstanceRef.current) return
+    
+    const map = mapInstanceRef.current
+    map.once('rendercomplete', () => {
+      const mapCanvas = document.createElement('canvas')
+      const size = map.getSize()
+      if (!size) return
+      
+      mapCanvas.width = size[0]
+      mapCanvas.height = size[1]
+      const mapContext = mapCanvas.getContext('2d')
+      if (!mapContext) return
+      
+      Array.prototype.forEach.call(
+        map.getViewport().querySelectorAll('.ol-layer canvas, canvas.ol-layer'),
+        (canvas: HTMLCanvasElement) => {
+          if (canvas.width > 0) {
+            const opacity = canvas.parentElement?.style.opacity || canvas.style.opacity
+            mapContext.globalAlpha = opacity === '' ? 1 : Number(opacity)
+            
+            let matrix
+            const transform = canvas.style.transform
+            if (transform) {
+              matrix = transform
+                .match(/^matrix\(([^\(]*)\)$/)?.[1]
+                ?.split(',')
+                ?.map(Number)
+            }
+            
+            if (matrix) {
+              mapContext.setTransform(...matrix)
+            }
+            mapContext.drawImage(canvas, 0, 0)
+            mapContext.setTransform(1, 0, 0, 1, 0, 0)
+            mapContext.globalAlpha = 1
+          }
+        }
+      )
+      
+      const link = document.createElement('a')
+      link.download = `map_${id}_${country}_${Date.now()}.png`
+      link.href = mapCanvas.toDataURL()
+      link.click()
+    })
+    map.renderSync()
+  }
+
+  const getOverlayDisplayText = () => {
+    if (!overlayInfo) return 'No overlay selected'
+    
+    let text = overlayInfo.name
+    if (overlayInfo.scenario) text += ` (${overlayInfo.scenario})`
+    if (overlayInfo.year) text += ` ${overlayInfo.year}`
+    if (overlayInfo.season) text += ` - ${overlayInfo.season}`
+    
+    return text
+  }
+
   return (
-    <div 
-      className={`map-container h-full w-full cursor-pointer ${isActive ? 'active' : ''}`}
-      onClick={onActivate}
-    >
-      <div ref={mapRef} className="w-full h-full" />
-      {isActive && (
-        <div className="absolute top-2 right-2 bg-primary text-primary-foreground px-2 py-1 rounded text-xs font-medium">
-          Active Map
+    <div className={`flex flex-col h-full border-2 rounded-lg overflow-hidden bg-white ${isActive ? 'border-primary' : 'border-border'}`}>
+      {/* Map Header */}
+      <div className="flex items-center justify-between p-3 bg-card border-b border-border">
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="font-medium text-sm text-foreground capitalize">
+              {country} - Map {id.split('-')[1]}
+            </h3>
+            {isActive && (
+              <span className="bg-primary text-primary-foreground px-2 py-0.5 rounded text-xs font-medium">
+                Active
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {getOverlayDisplayText()}
+          </p>
         </div>
-      )}
+        
+        <div className="flex items-center gap-2">
+          {/* Legend placeholder */}
+          {overlayInfo && (
+            <div className="flex items-center gap-1 text-xs">
+              <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-red-500 rounded-sm"></div>
+              <span className="text-muted-foreground">Legend</span>
+            </div>
+          )}
+          
+          {/* Download button */}
+          <button
+            onClick={handleDownload}
+            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
+            title="Download map as PNG"
+          >
+            <Download size={16} />
+          </button>
+        </div>
+      </div>
+      
+      {/* Map Container */}
+      <div 
+        className="flex-1 relative cursor-pointer"
+        onClick={onActivate}
+      >
+        <div ref={mapRef} className="w-full h-full" />
+      </div>
     </div>
   )
 }
