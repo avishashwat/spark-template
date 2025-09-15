@@ -12,13 +12,13 @@
 }
 
 :root {
-  /* UN ESCAP Official Colors */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.2 0.01 258.34);
-  --card: oklch(0.98 0.001 258.34);
-  --card-foreground: oklch(0.2 0.01 258.34);
+  /* UN ESCAP Official Colors - Updated Scheme */
+  --background: oklch(0.98 0 0);  /* #f8f9fa - Light */
+  --foreground: oklch(0.15 0 0);  /* #1a1a1a - Dark */
+  --card: oklch(1 0 0);           /* #ffffff - White */
+  --card-foreground: oklch(0.15 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.01 258.34);
+  --popover-foreground: oklch(0.15 0 0);
   
   /* Primary: UN Blue #0072bc */
   --primary: oklch(0.48 0.13 258.34);
@@ -32,12 +32,18 @@
   --accent: oklch(0.72 0.15 127.72);
   --accent-foreground: oklch(1 0 0);
   
-  --muted: oklch(0.96 0.001 258.34);
-  --muted-foreground: oklch(0.46 0.006 258.34);
+  /* Warning: Yellow #ffc20e */
+  --warning: oklch(0.84 0.13 82.76);
+  --warning-foreground: oklch(0.15 0 0);
+  
+  /* Danger: Red #dc382d */
   --destructive: oklch(0.55 0.18 17.38);
   --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.9 0.003 258.34);
-  --input: oklch(0.9 0.003 258.34);
+  
+  --muted: oklch(0.96 0 0);       /* Lighter version of background */
+  --muted-foreground: oklch(0.46 0 0);
+  --border: oklch(0.9 0 0);
+  --input: oklch(0.9 0 0);
   --ring: oklch(0.48 0.13 258.34);
   
   --radius: 0.5rem;
@@ -58,6 +64,8 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
