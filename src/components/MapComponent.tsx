@@ -396,11 +396,60 @@ export function MapComponent({
       
       {/* Content Container */}
       <div 
-        className="flex-1 relative"
+        className="flex-1 relative flex flex-col"
         onClick={viewMode === 'map' ? onActivate : undefined}
       >
         {viewMode === 'map' && (
-          <div ref={mapRef} className="w-full h-full cursor-pointer" />
+          <>
+            <div className="flex-1 relative">
+              <div ref={mapRef} className="w-full h-full cursor-pointer" />
+              
+              {/* North Arrow */}
+              <div className="absolute top-2 right-2 bg-white/90 border border-border rounded-lg p-2 shadow-sm north-arrow">
+                <div className="flex flex-col items-center">
+                  <div className="w-6 h-6 flex items-center justify-center">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path 
+                        d="M12 2L14.5 8.5L12 7L9.5 8.5L12 2Z" 
+                        fill="#0072bc" 
+                        stroke="#0072bc" 
+                        strokeWidth="0.5"
+                      />
+                      <path 
+                        d="M12 22L14.5 15.5L12 17L9.5 15.5L12 22Z" 
+                        fill="white" 
+                        stroke="#0072bc" 
+                        strokeWidth="0.5"
+                      />
+                      <line 
+                        x1="12" 
+                        y1="2" 
+                        x2="12" 
+                        y2="22" 
+                        stroke="#0072bc" 
+                        strokeWidth="1"
+                      />
+                    </svg>
+                  </div>
+                  <span className="text-xs font-medium text-foreground mt-1">N</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Source and Disclaimer - only show when overlay is selected */}
+            {overlayInfo && (
+              <div className="bg-muted/50 border-t border-border px-3 py-2">
+                <div className="text-xs text-muted-foreground space-y-1 map-disclaimer">
+                  <div>
+                    <span className="font-medium text-foreground">Map source:</span> UN Geospatial
+                  </div>
+                  <div>
+                    <span className="font-medium text-foreground">Disclaimer:</span> The boundaries and names shown and the designations used on this map do not imply official endorsement or acceptance by the United Nations. Dotted line represents approximately the Line of Control in Jammu and Kashmir agreed upon by India and Pakistan. The final status of Jammu and Kashmir has not yet been agreed upon by the parties.
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
         
         {viewMode === 'chart' && (
