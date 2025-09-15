@@ -503,15 +503,96 @@ export function MapComponent({
           return
         }
         
+        // Create a mask layer that covers the entire world and greys out areas outside the boundary
+        const worldExtent = [-180, -90, 180, 90]
+        const worldGeometry = {
+          type: "Polygon",
+          coordinates: [[
+            [worldExtent[0], worldExtent[1]], // bottom-left
+            [worldExtent[2], worldExtent[1]], // bottom-right
+            [worldExtent[2], worldExtent[3]], // top-right
+            [worldExtent[0], worldExtent[3]], // top-left
+            [worldExtent[0], worldExtent[1]]  // close polygon
+          ]]
+        }
+        
+        // Get the boundary geometry to create holes in the mask
+        const boundaryFeatures = boundarySource.getFeatures()
+        let maskGeometry = worldGeometry
+        
+        if (boundaryFeatures.length > 0) {
+          // Create a polygon with holes where the boundary features are
+          const holes: number[][][] = []
+          
+          boundaryFeatures.forEach(feature => {
+            const geom = feature.getGeometry()
+            if (geom?.getType() === 'Polygon') {
+              const coords = (geom as any).getCoordinates()
+              holes.push(coords[0]) // Add the exterior ring as a hole
+            } else if (geom?.getType() === 'MultiPolygon') {
+              const coords = (geom as any).getCoordinates()
+              coords.forEach((polygon: number[][][]) => {
+                holes.push(polygon[0]) // Add each exterior ring as a hole
+              })
+            }
+          })
+          
+          if (holes.length > 0) {
+            maskGeometry = {
+              type: "Polygon",
+              coordinates: [worldGeometry.coordinates[0], ...holes]
+            }
+          }
+        }
+        
+        // Create mask source and layer
+        const maskSource = new VectorSource()
+        const geojsonFormat = new GeoJSON()
+        
+        // Create a GeoJSON feature object
+        const maskGeoJSON = {
+          type: "Feature",
+          geometry: maskGeometry,
+          properties: {}
+        }
+        
+        try {
+          const maskFeature = geojsonFormat.readFeature(maskGeoJSON, {
+            featureProjection: 'EPSG:4326',
+            dataProjection: 'EPSG:4326'
+          })
+          
+          if (Array.isArray(maskFeature)) {
+            maskSource.addFeatures(maskFeature)
+          } else {
+            maskSource.addFeature(maskFeature)
+          }
+        } catch (error) {
+          console.error('Error creating mask feature:', error)
+        }
+        
+        const maskLayer = new VectorLayer({
+          source: maskSource,
+          style: new Style({
+            fill: new Fill({
+              color: 'rgba(128, 128, 128, 0.4)' // Grey overlay with 40% opacity
+            })
+          }),
+          zIndex: 999 // Below boundary but above basemap
+        })
+        
+        maskLayer.set('layerType', 'countryMask')
+        
+        // Create the boundary layer with black stroke and no fill
         const boundaryLayer = new VectorLayer({
           source: boundarySource,
           style: new Style({
             stroke: new Stroke({
-              color: '#FF0000', // Use red color for better visibility during testing
-              width: 3
+              color: '#000000', // Black border
+              width: 2
             }),
             fill: new Fill({
-              color: 'rgba(255, 0, 0, 0.1)' // Slight red fill for testing visibility
+              color: 'rgba(0, 0, 0, 0)' // Transparent fill - no red tint
             })
           }),
           zIndex: 1000 // Ensure it's on top
@@ -520,12 +601,13 @@ export function MapComponent({
         // Set layer type for identification
         boundaryLayer.set('layerType', 'boundary')
         
-        console.log('Created boundary layer')
+        console.log('Created boundary and mask layers')
         
-        // Add the boundary layer to the map
+        // Add both layers to the map
+        map.addLayer(maskLayer)
         map.addLayer(boundaryLayer)
         
-        console.log('Added boundary layer to map. Total layers now:', map.getLayers().getLength())
+        console.log('Added boundary and mask layers to map. Total layers now:', map.getLayers().getLength())
         
         // Force a re-render to ensure the layer appears
         map.renderSync()
