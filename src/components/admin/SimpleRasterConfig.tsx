@@ -367,18 +367,35 @@ export function SimpleRasterConfig({ file, onSave, onCancel }: SimpleRasterConfi
                       <div className="space-y-1">
                         <Label className="text-xs">Color</Label>
                         <div className="flex items-center gap-2">
-                          <Input
+                          <input
                             type="color"
                             value={cls.color}
                             onChange={(e) => handleClassChange(index, 'color', e.target.value)}
-                            className="h-8 w-12 p-1"
+                            className="h-8 w-12 p-1 rounded border cursor-pointer flex-shrink-0"
                           />
                           <Input
                             type="text"
                             value={cls.color}
-                            onChange={(e) => handleClassChange(index, 'color', e.target.value)}
+                            onChange={(e) => {
+                              let value = e.target.value.trim()
+                              // Add # if missing and valid hex characters
+                              if (value && !value.startsWith('#') && /^[0-9A-Fa-f]{3,6}$/.test(value)) {
+                                value = '#' + value
+                              }
+                              handleClassChange(index, 'color', value)
+                            }}
+                            onPaste={(e) => {
+                              e.preventDefault()
+                              let value = e.clipboardData.getData('text').trim()
+                              // Add # if missing and valid hex characters
+                              if (value && !value.startsWith('#') && /^[0-9A-Fa-f]{3,6}$/.test(value)) {
+                                value = '#' + value
+                              }
+                              handleClassChange(index, 'color', value)
+                            }}
                             className="h-8 text-xs font-mono flex-1"
                             placeholder="#ffffff"
+                            maxLength={7}
                           />
                         </div>
                       </div>

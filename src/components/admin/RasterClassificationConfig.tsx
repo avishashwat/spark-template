@@ -371,14 +371,31 @@ export function RasterClassificationConfig({
                             type="color"
                             value={cls.color}
                             onChange={(e) => updateClassification(cls.id, 'color', e.target.value)}
-                            className="w-8 h-8 rounded border cursor-pointer"
+                            className="w-8 h-8 rounded border cursor-pointer flex-shrink-0"
                           />
                           <Input
                             type="text"
                             value={cls.color}
-                            onChange={(e) => updateClassification(cls.id, 'color', e.target.value)}
+                            onChange={(e) => {
+                              let value = e.target.value.trim()
+                              // Add # if missing and valid hex characters
+                              if (value && !value.startsWith('#') && /^[0-9A-Fa-f]{3,6}$/.test(value)) {
+                                value = '#' + value
+                              }
+                              updateClassification(cls.id, 'color', value)
+                            }}
+                            onPaste={(e) => {
+                              e.preventDefault()
+                              let value = e.clipboardData.getData('text').trim()
+                              // Add # if missing and valid hex characters
+                              if (value && !value.startsWith('#') && /^[0-9A-Fa-f]{3,6}$/.test(value)) {
+                                value = '#' + value
+                              }
+                              updateClassification(cls.id, 'color', value)
+                            }}
                             placeholder="#000000"
                             className="font-mono text-sm"
+                            maxLength={7}
                           />
                         </div>
                       </div>
