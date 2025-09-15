@@ -102,7 +102,7 @@ export function RasterClassificationConfig({
         min,
         max,
         color: defaultColors[i],
-        label: `(${min}) - (${max})`
+        label: `${min} - ${max}`
       })
     }
     
@@ -137,7 +137,7 @@ export function RasterClassificationConfig({
           cls.id === id ? { 
             ...cls, 
             [field]: numValue,
-            label: `(${cls.min}) - (${numValue})` // Update current class label
+            label: `${cls.min} - ${numValue}` // Update current class label
           } : cls
         )
         
@@ -150,7 +150,7 @@ export function RasterClassificationConfig({
           updated[currentIndex + 1] = {
             ...updated[currentIndex + 1],
             min: nextMin,
-            label: `(${nextMin}) - (${updated[currentIndex + 1].max})` // Update next class label
+            label: `${nextMin} - ${updated[currentIndex + 1].max}` // Update next class label
           }
         }
         
