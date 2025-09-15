@@ -530,16 +530,17 @@ export function MapComponent({
               if (geom?.getType() === 'Polygon') {
                 const coords = (geom as any).getCoordinates()
                 // For polygons, only use the exterior ring (first coordinate array)
-                // Ignore interior rings which represent holes within the polygon
+                // Interior rings represent actual holes within the administrative unit and should not be cut out of the mask
                 if (coords && coords.length > 0) {
-                  holes.push(coords[0]) // Only the exterior ring
+                  holes.push(coords[0]) // Only the exterior ring - each feature is a separate admin unit
                 }
               } else if (geom?.getType() === 'MultiPolygon') {
                 const coords = (geom as any).getCoordinates()
                 coords.forEach((polygon: number[][][]) => {
                   // For each polygon in the multipolygon, only use the exterior ring
+                  // Each polygon represents a separate part of the same administrative unit
                   if (polygon && polygon.length > 0) {
-                    holes.push(polygon[0]) // Only the exterior ring
+                    holes.push(polygon[0]) // Only the exterior ring - ignore interior holes
                   }
                 })
               }
