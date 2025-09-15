@@ -66,7 +66,7 @@ export function DataUpload() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   // Store processed files and their configurations
-  const [processedData, setProcessedData] = useKV('admin-processed-data', {} as any)
+  const [processedData, setProcessedData] = useKV<Record<string, any>>('admin-processed-data', {})
 
   const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
@@ -155,10 +155,29 @@ export function DataUpload() {
     setCurrentStep('config')
   }
 
-  const handleConfigComplete = (config: any) => {
-    // Store the configuration
-    console.log('Configuration completed:', config)
-    setCurrentStep('review')
+  const handleConfigComplete = async (config: any) => {
+    try {
+      // Store the configuration in the processed data
+      const currentData = processedData || {}
+      const countryData = currentData[selectedCountry] || {}
+      
+      const updatedProcessedData = {
+        ...currentData,
+        [selectedCountry]: {
+          ...countryData,
+          [selectedCategory]: config
+        }
+      }
+      
+      await setProcessedData(updatedProcessedData)
+      
+      console.log('Configuration completed and saved:', config)
+      toast.success('Configuration saved successfully')
+      setCurrentStep('review')
+    } catch (error) {
+      console.error('Failed to save configuration:', error)
+      toast.error('Failed to save configuration')
+    }
   }
 
   const selectedCategoryInfo = DATA_CATEGORIES.find(cat => cat.id === selectedCategory)

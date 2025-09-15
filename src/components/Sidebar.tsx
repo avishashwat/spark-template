@@ -6,6 +6,7 @@ import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
 import { Stack, Thermometer, Drop, Flashlight, Eye, EyeSlash, X, Plus } from '@phosphor-icons/react'
+import { useKV } from '@github/spark/hooks'
 
 interface LayerConfig {
   id: string
@@ -79,6 +80,9 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout, selectedCountry
   const [giriScenario, setGiriScenario] = useState<string>('')
   const [energyType, setEnergyType] = useState<string>('')
   const [activeLayers, setActiveLayers] = useState<LayerConfig[]>([])
+  
+  // Access uploaded data configurations
+  const [uploadedData] = useKV<Record<string, any>>('admin-processed-data', {})
 
   // Clear layers when layout changes
   useEffect(() => {
@@ -127,23 +131,43 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout, selectedCountry
     let layerInfo: any = null
     
     if (selectedCategory === 'climate' && climateVariable && scenario) {
+      // Try to get real uploaded data first
+      const categoryKey = climateVariable.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '')
+      const uploadedConfig = uploadedData && uploadedData[selectedCountry]?.[categoryKey]
+      
       layerInfo = {
         type: 'Climate',
         name: climateVariable,
         scenario: scenario,
         year: yearRange || undefined,
-        season: season || (seasonalityType === 'Annual' ? 'Annual' : undefined)
+        season: season || (seasonalityType === 'Annual' ? 'Annual' : undefined),
+        // Include real classification data if available
+        classifications: uploadedConfig?.classifications,
+        statistics: uploadedConfig?.statistics
       }
     } else if (selectedCategory === 'giri' && giriVariable && giriScenario) {
+      // Try to get real uploaded data first
+      const categoryKey = giriVariable.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '')
+      const uploadedConfig = uploadedData && uploadedData[selectedCountry]?.[categoryKey]
+      
       layerInfo = {
         type: 'GIRI',
         name: giriVariable,
-        scenario: giriScenario
+        scenario: giriScenario,
+        // Include real classification data if available
+        classifications: uploadedConfig?.classifications,
+        statistics: uploadedConfig?.statistics
       }
     } else if (selectedCategory === 'energy' && energyType) {
+      // Try to get real uploaded data first
+      const categoryKey = energyType.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '')
+      const uploadedConfig = uploadedData && uploadedData[selectedCountry]?.[categoryKey]
+      
       layerInfo = {
         type: 'Energy',
-        name: energyType
+        name: energyType,
+        // Include real configuration data if available
+        configuration: uploadedConfig
       }
     }
 

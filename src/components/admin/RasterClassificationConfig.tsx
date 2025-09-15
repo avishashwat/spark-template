@@ -46,31 +46,88 @@ export function RasterClassificationConfig({
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [templates, setTemplates] = useKV('classification-templates', {} as any)
 
-  // Mock raster analysis - in production this would use GDAL
+  // Real raster analysis using GeoTIFF
   const analyzeRaster = async (file: File) => {
     setIsAnalyzing(true)
     
-    // Simulate analysis delay
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    // Mock statistics based on data type
-    const mockStats: Record<string, RasterStats> = {
-      'max-temp': { min: -5, max: 45, mean: 22.5, stdDev: 8.2 },
-      'min-temp': { min: -25, max: 25, mean: 8.3, stdDev: 12.1 },
-      'mean-temp': { min: -15, max: 35, mean: 15.4, stdDev: 9.8 },
-      'precipitation': { min: 0, max: 3000, mean: 850, stdDev: 420 },
-      'solar-radiation': { min: 800, max: 2400, mean: 1650, stdDev: 280 },
-      'cooling-degree-days': { min: 0, max: 4500, mean: 1200, stdDev: 650 },
-      'heating-degree-days': { min: 0, max: 6000, mean: 2800, stdDev: 890 },
-      'flood': { min: 0, max: 1, mean: 0.3, stdDev: 0.2 },
-      'drought': { min: 0, max: 1, mean: 0.25, stdDev: 0.18 }
+    try {
+      // Import GeoTIFF dynamically to handle ES modules
+      const { fromBlob } = await import('geotiff')
+      
+      // Read the raster file
+      const tiff = await fromBlob(file)
+      const image = await tiff.getImage()
+      const rasters = await image.readRasters()
+      
+      // Get the first band data - ensure it's an array
+      const rasterData = rasters[0]
+      if (typeof rasterData === 'number') {
+        throw new Error('Invalid raster data format')
+      }
+      
+      // Convert to regular array for easier processing
+      const dataArray = Array.from(rasterData)
+      
+      // Calculate statistics, excluding nodata values
+      const noDataValue = image.getGDALNoData() || null
+      let validData: number[] = []
+      
+      for (let i = 0; i < dataArray.length; i++) {
+        const value = dataArray[i]
+        if (noDataValue === null || value !== noDataValue) {
+          // Also exclude common nodata values like -9999, -32768, etc.
+          if (value !== -9999 && value !== -32768 && value !== -3.4028235e+38 && !isNaN(value) && isFinite(value)) {
+            validData.push(value)
+          }
+        }
+      }
+      
+      if (validData.length === 0) {
+        throw new Error('No valid pixel values found in raster')
+      }
+      
+      // Calculate statistics
+      const sortedData = validData.sort((a, b) => a - b)
+      const min = sortedData[0]
+      const max = sortedData[sortedData.length - 1]
+      const sum = validData.reduce((acc, val) => acc + val, 0)
+      const mean = sum / validData.length
+      
+      // Calculate standard deviation
+      const squaredDiffs = validData.map(value => Math.pow(value - mean, 2))
+      const avgSquaredDiff = squaredDiffs.reduce((acc, val) => acc + val, 0) / validData.length
+      const stdDev = Math.sqrt(avgSquaredDiff)
+      
+      const stats: RasterStats = {
+        min: parseFloat(min.toFixed(6)),
+        max: parseFloat(max.toFixed(6)),
+        mean: parseFloat(mean.toFixed(6)),
+        stdDev: parseFloat(stdDev.toFixed(6))
+      }
+      
+      console.log('Raster analysis results:', {
+        fileName: file.name,
+        totalPixels: dataArray.length,
+        validPixels: validData.length,
+        noDataValue,
+        stats
+      })
+      
+      setRasterStats(stats)
+      generateDefaultClassification(stats)
+      toast.success(`Raster analyzed: ${validData.length} valid pixels found`)
+      
+    } catch (error) {
+      console.error('Raster analysis failed:', error)
+      toast.error(`Failed to analyze raster: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      
+      // Fallback to basic stats if analysis fails
+      const fallbackStats = { min: 0, max: 100, mean: 50, stdDev: 25 }
+      setRasterStats(fallbackStats)
+      generateDefaultClassification(fallbackStats)
+    } finally {
+      setIsAnalyzing(false)
     }
-    
-    const stats = mockStats[category.id] || { min: 0, max: 100, mean: 50, stdDev: 25 }
-    
-    setRasterStats(stats)
-    generateDefaultClassification(stats)
-    setIsAnalyzing(false)
   }
 
   const generateDefaultClassification = (stats: RasterStats) => {

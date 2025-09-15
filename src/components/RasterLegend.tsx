@@ -7,6 +7,19 @@ interface RasterLegendProps {
     scenario?: string
     year?: string
     season?: string
+    classifications?: Array<{
+      id: string
+      min: number
+      max: number
+      color: string
+      label: string
+    }>
+    statistics?: {
+      min: number
+      max: number
+      mean: number
+      stdDev: number
+    }
   }
   mapLayout?: number
 }
@@ -105,8 +118,26 @@ const getDataRanges = (dataType: string) => {
 }
 
 export function RasterLegend({ overlayInfo, mapLayout = 1 }: RasterLegendProps) {
-  const colorScheme = getColorScheme(overlayInfo.name)
-  const dataRanges = getDataRanges(overlayInfo.name)
+  // Use real classification data if available, otherwise fall back to default color schemes
+  const useRealData = overlayInfo.classifications && overlayInfo.classifications.length > 0
+  
+  let colorScheme: Array<{ color: string; label: string }>
+  
+  if (useRealData) {
+    // Use the actual uploaded classification data
+    colorScheme = overlayInfo.classifications!.map(cls => ({
+      color: cls.color,
+      label: cls.label
+    }))
+  } else {
+    // Fall back to default color schemes
+    colorScheme = getColorScheme(overlayInfo.name)
+    const dataRanges = getDataRanges(overlayInfo.name)
+    colorScheme = colorScheme.map((item, index) => ({
+      color: item.color,
+      label: dataRanges[index] || item.label
+    }))
+  }
   
   // Scale sizing based on map layout
   const getScaledClasses = () => {
@@ -142,10 +173,19 @@ export function RasterLegend({ overlayInfo, mapLayout = 1 }: RasterLegendProps) 
             style={{ backgroundColor: item.color }}
           />
           <span className={`${classes.text} text-foreground`}>
-            {dataRanges[index] || item.label}
+            {item.label}
           </span>
         </div>
       ))}
+      
+      {/* Show data source indicator */}
+      {useRealData && overlayInfo.statistics && mapLayout === 1 && (
+        <div className="mt-2 pt-1 border-t border-gray-200">
+          <div className={`${classes.text} text-muted-foreground`}>
+            Range: {overlayInfo.statistics.min.toFixed(2)} - {overlayInfo.statistics.max.toFixed(2)}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
