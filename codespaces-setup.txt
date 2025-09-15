@@ -1,0 +1,57 @@
+🚀 ESCAP Climate Risk App - Codespaces Setup Guide
+================================================
+
+❌ DOCKER LIMITATION DISCOVERED
+GitHub Codespaces has Docker restrictions that prevent our infrastructure from running.
+
+✅ ALTERNATIVE SOLUTION - LIGHTWEIGHT MODE
+We'll implement a client-side optimization approach instead:
+
+1. **Optimized File Processing**
+   - Convert rasters to Cloud Optimized GeoTIFF (COG) format client-side
+   - Use WebGL-accelerated rendering for faster map updates
+   - Implement progressive loading for large datasets
+
+2. **Memory-Based Caching**
+   - Cache boundary data in browser memory
+   - Pre-load and optimize shapefile data
+   - Implement smart data streaming
+
+3. **Client-Side Optimization**
+   - Use Web Workers for heavy processing
+   - Implement tile-based rendering
+   - Add compression for data transfer
+
+📋 NEXT STEPS:
+
+1. **Continue in Current Environment**
+   Your current Spark app is fully functional without Docker
+   
+2. **Upload Test Data**
+   - Go to Admin Panel (button in top bar)
+   - Upload your boundary shapefiles (zip format)
+   - Upload raster files (.tif format)
+   - Configure classifications and colors
+
+3. **Performance Optimizations**
+   We'll implement client-side optimizations that work in Codespaces:
+   - Fast boundary loading
+   - Efficient raster rendering
+   - Memory-based caching
+
+4. **Future Infrastructure**
+   For production deployment with full GeoServer stack:
+   - Use a VPS or cloud server with Docker support
+   - Deploy the complete PostGIS + GeoServer infrastructure
+   - Migrate data to production-grade setup
+
+🎯 IMMEDIATE ACTION:
+Continue using the current app - it's fully functional for testing and development!
+
+The admin panel allows you to:
+- Upload boundary files for all countries
+- Upload and configure raster data
+- Set up point shapefiles for energy infrastructure
+- Test all overlays and visualizations
+
+💡 TIP: The app will work great for your testing needs. When ready for production scale, we can deploy the full infrastructure on a proper server.
