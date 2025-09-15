@@ -10,7 +10,7 @@ import { FileUploadManager } from './FileUploadManager'
 import { BoundaryManager } from './BoundaryManager'
 import { SystemSettings } from './SystemSettings'
 
-export function AdminPanel() {
+export function AdminPanel({ onShowInfrastructure }: { onShowInfrastructure?: () => void }) {
   const [user, setUser] = useState<any>(null)
   const [stats, setStats] = useState({
     totalRasters: 0,
@@ -84,6 +84,12 @@ export function AdminPanel() {
           </div>
           
           <div className="flex items-center space-x-4">
+            {onShowInfrastructure && (
+              <Button variant="ghost" size="sm" onClick={onShowInfrastructure} className="flex items-center gap-2">
+                <Database size={16} />
+                Infrastructure
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={handleBackToApp} className="flex items-center gap-2">
               <Globe size={16} />
               Back to Map

@@ -1,146 +1,138 @@
-# UN ESCAP Climate & Energy Risk Admin Panel - PRD
+# UN ESCAP Climate & Energy Risk Visualization Platform - Enhanced Geospatial Architecture
 
 ## Core Purpose & Success
-- **Mission Statement**: Provide UN ESCAP administrators with a secure, comprehensive interface to manage geospatial data layers, upload files, configure visualizations, and maintain the climate and energy risk platform.
-- **Success Indicators**: Streamlined data upload process, consistent file organization, reduced manual configuration time, error-free layer management, and improved data accessibility.
-- **Experience Qualities**: Professional, Efficient, Secure
+- **Mission Statement**: Transform the UN ESCAP platform into a high-performance geospatial visualization system capable of handling multi-gigabyte datasets with real-time responsiveness
+- **Success Indicators**: Sub-second layer switching, smooth multi-map synchronization, professional-grade data management
+- **Experience Qualities**: Fast, Professional, Scalable
 
 ## Project Classification & Approach
-- **Complexity Level**: Complex Application (advanced functionality, authentication, file management, data processing)
-- **Primary User Activity**: Creating and Managing (uploading files, configuring layers, setting classifications, managing boundaries)
+- **Complexity Level**: Complex Geospatial Application (enterprise-grade data management)
+- **Primary User Activity**: Interactive Analysis with Real-time Collaboration
 
-## Thought Process for Feature Selection
-- **Core Problem Analysis**: Administrators need to efficiently upload and manage large volumes of geospatial data with complex classification schemes, visualization settings, and boundary management.
-- **User Context**: Technical administrators working with climate and energy datasets, requiring precise control over data presentation, organization, and system configuration.
-- **Critical Path**: Authentication → Data Layer Setup → File Upload → Classification Configuration → Boundary Management → System Settings → Deployment
-- **Key Moments**: Secure login, data layer creation, file upload with validation, classification setup, boundary configuration, preview and confirmation
+## Enhanced Architecture Implementation
 
-## Essential Features
+### 1. PostGIS + GeoServer Stack
+**Backend Infrastructure:**
+- PostGIS database for spatial data storage and analysis
+- GeoServer for web map services (WMS/WFS)
+- RESTful API for data management and processing
+- Real-time WebSocket connections for live updates
 
-### Authentication System
-- **Functionality**: Secure login/logout with GitHub integration using spark.user() and session management
-- **Purpose**: Protect admin functions, track administrative actions, and ensure only authorized access
-- **Success Criteria**: Only application owner can access admin panel with persistent session
+**Data Processing Pipeline:**
+- Automated TIF → COG conversion with GDAL
+- Shapefile → Vector Tiles (MBTiles) conversion
+- Server-side raster classification and styling
+- Batch processing for large datasets
 
-### Data Layer Management
-- **Functionality**: Create, edit, and delete data layer configurations for climate, GIRI, and energy variables
-- **Purpose**: Define available data types, scenarios, seasonality options, and year ranges
-- **Success Criteria**: All layer types properly configured with appropriate options
+### 2. Optimized Data Formats
+**Raster Data:**
+- Cloud Optimized GeoTIFF (COG) with tile pyramids
+- Server-side color classification based on Excel specifications
+- Real-time style application without client-side processing
 
-### File Upload Management
-- **Functionality**: Handle TIF/COG raster uploads, shapefile bundles (.zip), and icon files with validation
-- **Purpose**: Centralized data ingestion with automatic organization and format validation
-- **Success Criteria**: Files uploaded successfully with proper naming conventions and validation
+**Vector Data:**
+- Vector tiles for administrative boundaries
+- PostGIS spatial indexing for instant province queries
+- Cached boundary masks for highlight effects
 
-### Raster Classification System
-- **Functionality**: Display raster statistics (min/max/mean), configure 5-class classifications with custom color schemes
-- **Purpose**: Enable precise control over data visualization, legend generation, and thematic mapping
-- **Success Criteria**: Classifications created efficiently with proper validation and color accessibility
+### 3. Real-time Collaboration Features
+**Live Data Streaming:**
+- WebSocket connections for real-time map synchronization
+- Collaborative annotations and markup tools
+- Shared view sessions between multiple users
+- Live cursor tracking across maps
 
-### Shapefile Attribute Management
-- **Functionality**: Attribute inspection, design capacity field selection, custom icon upload and configuration
-- **Purpose**: Configure point visualization with appropriate sizing, symbolization, and capacity-based scaling
-- **Success Criteria**: Point layers display correctly with proper scaling, icons, and attribute-based sizing
+**Advanced Analytics:**
+- Server-side spatial analysis
+- Real-time chart and table generation
+- Export capabilities for analysis results
 
-### Boundary Management
-- **Functionality**: Upload administrative boundary shapefiles, configure hover attributes, and manage administrative levels
-- **Purpose**: Enable country-specific zooming, region highlighting, and administrative area display
-- **Success Criteria**: Boundaries load correctly with proper hover effects and country-based zooming
+## Technical Implementation Strategy
 
-### Template System
-- **Functionality**: Save and reuse classification schemes, color palettes, capacity attributes, and icon sets
-- **Purpose**: Reduce repetitive configuration work, ensure consistency, and speed up data processing
-- **Success Criteria**: Previous configurations can be applied to new datasets with one-click selection
+### Backend Services
+- **GeoServer Instance**: Map tile serving and styling
+- **PostGIS Database**: Spatial data storage and queries
+- **Processing API**: Data upload, conversion, and analysis
+- **WebSocket Server**: Real-time collaboration features
 
-### System Settings
-- **Functionality**: Configure application settings, backup data, manage cache, and control system behavior
-- **Purpose**: Provide comprehensive system administration and maintenance capabilities
-- **Success Criteria**: System operates efficiently with proper backup and configuration management
+### Frontend Enhancements
+- **Optimized OpenLayers**: Vector tile support and COG rendering
+- **WebSocket Integration**: Real-time map synchronization
+- **Advanced UI**: Professional data management interface
+- **Collaborative Tools**: Shared sessions and annotations
 
-### Directory Management
-- **Functionality**: Automatic file organization following established naming conventions with country/type/layer structure
-- **Purpose**: Maintain structured data organization for efficient retrieval and systematic access
-- **Success Criteria**: Files organized predictably and accessible to main application
+### Performance Optimizations
+- **Caching Strategy**: Multi-level caching (browser, CDN, server)
+- **Lazy Loading**: Progressive data loading based on zoom level
+- **Bandwidth Optimization**: Compressed tile formats and streaming
+- **Memory Management**: Efficient layer cleanup and garbage collection
 
-### COG Conversion Utility
-- **Functionality**: Provide script and guidance for converting TIF files to Cloud Optimized GeoTIFF format
-- **Purpose**: Optimize raster performance for web display and faster loading
-- **Success Criteria**: Rasters load quickly with minimal loading time and smooth overlay transitions
+## Data Management Workflow
 
-## Design Direction
+### Upload Process
+1. **File Validation**: Format checking and CRS validation
+2. **Automated Conversion**: TIF→COG, SHP→Vector Tiles
+3. **Database Integration**: PostGIS storage with spatial indexing
+4. **Style Configuration**: Classification and color mapping
+5. **Service Publication**: Automatic GeoServer layer creation
 
-### Visual Tone & Identity
-- **Emotional Response**: Confidence, control, and efficiency in data management
-- **Design Personality**: Professional, systematic, and detail-oriented
-- **Visual Metaphors**: File cabinet organization, scientific precision, administrative control
-- **Simplicity Spectrum**: Rich interface with detailed controls while maintaining clarity
+### Runtime Performance
+- **Instant Layer Switching**: Pre-rendered tiles and cached styles
+- **Smooth Synchronization**: WebSocket-based view coordination
+- **Scalable Architecture**: Horizontal scaling for multiple users
 
-### Color Strategy
-- **Color Scheme Type**: Analogous with UN ESCAP brand colors
-- **Primary Color**: #0072bc (UN Blue) - Authority and trust
-- **Secondary Colors**: #009edb (Light Blue) - Supporting actions
-- **Accent Color**: #56c02b (Green) - Success states and confirmations
-- **Color Psychology**: Blue conveys reliability and professionalism, green indicates successful operations
-- **Color Accessibility**: High contrast ratios maintained throughout interface
-- **Foreground/Background Pairings**:
-  - White text on #0072bc (primary buttons)
-  - Dark text (#1a1a1a) on light backgrounds (#f8f9fa)
-  - White text on #56c02b (success indicators)
+## Enhanced Features
 
-### Typography System
-- **Font Pairing Strategy**: Inter for all interface elements - consistent with main application
-- **Typographic Hierarchy**: Clear distinction between headers (600 weight), labels (500 weight), and body text (400 weight)
-- **Font Personality**: Modern, technical, and highly legible
-- **Readability Focus**: Optimized for data-heavy interfaces with clear information hierarchy
-- **Typography Consistency**: Consistent sizing and spacing throughout admin interface
-- **Which fonts**: Inter (primary), system fonts as fallback
-- **Legibility Check**: Excellent legibility for technical data and form interfaces
+### Professional Data Management
+- **Version Control**: Track data updates and changes
+- **Metadata Management**: Comprehensive dataset documentation
+- **Access Control**: Role-based permissions for data access
+- **Audit Logging**: Complete usage tracking and analytics
 
-### Visual Hierarchy & Layout
-- **Attention Direction**: Clear focus on current task with progressive disclosure of options
-- **White Space Philosophy**: Generous spacing to reduce cognitive load in complex interfaces
-- **Grid System**: Consistent 24px grid system aligned with main application
-- **Responsive Approach**: Desktop-focused with mobile considerations for emergency access
-- **Content Density**: Balanced information density with clear grouping and separation
+### Advanced Visualization
+- **Dynamic Styling**: Real-time style adjustments
+- **Multi-temporal Analysis**: Time-series data visualization
+- **3D Terrain Integration**: Elevation-aware rendering
+- **Custom Projections**: Support for regional coordinate systems
 
-### Animations
-- **Purposeful Meaning**: Subtle animations for state changes and file upload progress
-- **Hierarchy of Movement**: Upload progress indicators and success confirmations
-- **Contextual Appropriateness**: Professional, subtle animations that enhance rather than distract
+### Collaboration Tools
+- **Shared Sessions**: Multiple users viewing same analysis
+- **Annotation System**: Markup and comment tools
+- **Export Options**: High-resolution map exports and reports
+- **Integration APIs**: Connect with external GIS systems
 
-### UI Elements & Component Selection
-- **Component Usage**: Forms for data input, tables for file management, modals for detailed configuration
-- **Component Customization**: UN ESCAP colors applied to shadcn components
-- **Component States**: Clear indication of upload progress, validation errors, and success states
-- **Icon Selection**: File type icons, administrative actions, status indicators
-- **Component Hierarchy**: Primary actions (upload, save), secondary actions (edit, delete), tertiary actions (view, copy)
-- **Spacing System**: Consistent padding using Tailwind's spacing scale
-- **Mobile Adaptation**: Responsive layouts that maintain functionality on smaller screens
+## Implementation Phases
 
-### Visual Consistency Framework
-- **Design System Approach**: Component-based design consistent with main application
-- **Style Guide Elements**: Color usage, typography rules, spacing guidelines
-- **Visual Rhythm**: Consistent patterns for forms, tables, and action buttons
-- **Brand Alignment**: Strong alignment with UN ESCAP visual identity
+### Phase 1: Infrastructure Setup (Week 1-2)
+- Deploy PostGIS and GeoServer instances
+- Create data processing pipeline
+- Implement basic WebSocket architecture
 
-### Accessibility & Readability
-- **Contrast Goal**: WCAG AA compliance minimum for all interface elements
-- **Keyboard Navigation**: Full keyboard accessibility for all administrative functions
-- **Screen Reader Support**: Proper labeling and structure for assistive technologies
+### Phase 2: Data Migration (Week 2-3)
+- Convert existing datasets to optimized formats
+- Configure GeoServer layers and styles
+- Implement automated upload workflow
 
-## Edge Cases & Problem Scenarios
-- **Large File Uploads**: Progress indication and error handling for large TIF files
-- **Invalid File Formats**: Clear error messages and format guidance
-- **Classification Conflicts**: Validation to prevent overlapping class ranges
-- **Network Interruptions**: Resume capability for interrupted uploads
-- **Concurrent Editing**: Prevention of conflicting simultaneous edits
+### Phase 3: Frontend Integration (Week 3-4)
+- Update OpenLayers to support new data sources
+- Implement real-time synchronization
+- Add collaborative features
 
-## Implementation Considerations
-- **File Storage**: Organized directory structure for efficient retrieval
-- **Data Validation**: Comprehensive validation for all uploaded data and configurations
-- **Security**: Proper authentication and authorization checks
-- **Performance**: Efficient handling of large geospatial files
-- **Backup**: Configuration backup and recovery capabilities
+### Phase 4: Performance Optimization (Week 4-5)
+- Implement caching strategies
+- Optimize rendering pipeline
+- Load testing and performance tuning
 
-## Reflection
-This admin panel design emphasizes precision and efficiency while maintaining the professional UN ESCAP brand identity. The interface prioritizes clear workflows for complex geospatial data management while providing the flexibility needed for diverse datasets. The template system reduces repetitive work while ensuring consistency across data layers.
+## Success Metrics
+- **Performance**: < 500ms layer switching time
+- **Scalability**: Support for 100+ concurrent users
+- **Data Volume**: Handle multi-GB datasets efficiently
+- **Reliability**: 99.9% uptime for map services
+
+## Risk Mitigation
+- **Fallback Systems**: Graceful degradation for slow connections
+- **Error Handling**: Comprehensive error recovery
+- **Monitoring**: Real-time performance monitoring
+- **Backup Strategy**: Automated data backups and recovery
+
+This enhanced architecture will transform the current system from a prototype into a production-ready geospatial platform capable of handling enterprise-scale requirements while maintaining the smooth user experience expected from modern web applications.

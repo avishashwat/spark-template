@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { AdminAuth } from './admin/AdminAuth'
 import { AdminPanel } from './admin/AdminPanel'
+import { GeospatialInfrastructure } from './GeospatialInfrastructure'
 
 export function AdminApp() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [showInfrastructure, setShowInfrastructure] = useState(false)
 
   useEffect(() => {
     checkExistingAuth()
@@ -50,5 +52,9 @@ export function AdminApp() {
     return <AdminAuth onAuthenticated={handleAuthenticated} />
   }
 
-  return <AdminPanel />
+  if (showInfrastructure) {
+    return <GeospatialInfrastructure />
+  }
+
+  return <AdminPanel onShowInfrastructure={() => setShowInfrastructure(true)} />
 }
