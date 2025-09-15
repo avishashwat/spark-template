@@ -522,21 +522,11 @@ export function MapComponent({
           {/* Download button */}
           <button
             onClick={handleDownload}
-            disabled={isDownloading}
-            className={`p-1.5 rounded transition-colors ${
-              isDownloading 
-                ? 'text-muted-foreground cursor-not-allowed' 
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-            }`}
-            title={isDownloading ? "Preparing download..." : "Download map as PNG"}
+            disabled={true}
+            className="p-1.5 rounded transition-colors text-muted-foreground/50 cursor-not-allowed"
+            title="Download feature temporarily disabled"
           >
-            {isDownloading ? (
-              <div className="animate-spin">
-                <Download size={16} />
-              </div>
-            ) : (
-              <Download size={16} />
-            )}
+            <Download size={16} />
           </button>
         </div>
       </div>

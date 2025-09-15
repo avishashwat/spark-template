@@ -228,7 +228,7 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
 
           {/* Selection Panel */}
           {selectedCategory && showSelectionPanel && (
-            <div className="space-y-3 border-2 rounded-lg p-3 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/30 shadow-sm">
+            <div className="space-y-3 border-2 rounded-lg p-4 bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/40 shadow-md">
               <div className="flex items-center justify-between">
                 <h4 className="font-semibold text-sm text-primary flex items-center gap-2">
                   {selectedCategory === 'climate' && (

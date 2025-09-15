@@ -32,7 +32,7 @@ function App() {
   const [basemap, setBasemap] = useState('osm')
   const [sharedView, setSharedView] = useState<{ center: [number, number], zoom: number }>({
     center: [90.433601, 27.514162], // Bhutan center
-    zoom: 9 // Higher zoom for better country fit
+    zoom: 8 // Better initial zoom for single map
   })
   
   // Store overlay information for each map
@@ -44,16 +44,26 @@ function App() {
     // Clear overlays when changing country
     setMapOverlays({})
     
-    // Update shared view based on country with better bounds to fit country properly
+    // Update shared view based on country with proper zoom levels for each layout
+    const getCountryZoom = (baseZoom: number) => {
+      switch (mapLayout) {
+        case 1: return baseZoom
+        case 2: return Math.max(baseZoom - 1, 3) // Slightly less zoom for 2 maps
+        case 4: return Math.max(baseZoom - 2, 2) // Even less zoom for 4 maps
+        default: return baseZoom
+      }
+    }
+    
     const countryBounds = {
-      bhutan: { center: [90.433601, 27.514162] as [number, number], zoom: 9 },   // Small country, higher zoom
-      mongolia: { center: [103.835, 46.862] as [number, number], zoom: 4 },     // Large country, lower zoom
-      laos: { center: [103.865, 18.220] as [number, number], zoom: 6 }          // Medium country, medium zoom
+      bhutan: { center: [90.433601, 27.514162] as [number, number], baseZoom: 8 },
+      mongolia: { center: [103.835, 46.862] as [number, number], baseZoom: 5 },
+      laos: { center: [103.865, 18.220] as [number, number], baseZoom: 6 }
     }
     
     const countryConfig = countryBounds[country as keyof typeof countryBounds]
-    setSharedView({ center: countryConfig.center, zoom: countryConfig.zoom })
-  }, [])
+    const adjustedZoom = getCountryZoom(countryConfig.baseZoom)
+    setSharedView({ center: countryConfig.center, zoom: adjustedZoom })
+  }, [mapLayout])
 
   const handleLayoutChange = useCallback((layout: number) => {
     setMapLayout(layout)
@@ -61,9 +71,26 @@ function App() {
     // Clear overlays when changing layout
     setMapOverlays({})
     
-    // Force clear any active layers in the sidebar component
-    // This will be handled by updating sidebar's active layers state
-  }, [])
+    // Adjust zoom based on new layout and current country
+    const getCountryZoom = (baseZoom: number) => {
+      switch (layout) {
+        case 1: return baseZoom
+        case 2: return Math.max(baseZoom - 1, 3) // Slightly less zoom for 2 maps
+        case 4: return Math.max(baseZoom - 2, 2) // Even less zoom for 4 maps
+        default: return baseZoom
+      }
+    }
+    
+    const countryBounds = {
+      bhutan: { center: [90.433601, 27.514162] as [number, number], baseZoom: 8 },
+      mongolia: { center: [103.835, 46.862] as [number, number], baseZoom: 5 },
+      laos: { center: [103.865, 18.220] as [number, number], baseZoom: 6 }
+    }
+    
+    const countryConfig = countryBounds[selectedCountry as keyof typeof countryBounds]
+    const adjustedZoom = getCountryZoom(countryConfig.baseZoom)
+    setSharedView({ center: countryConfig.center, zoom: adjustedZoom })
+  }, [selectedCountry])
 
   const handleMapActivate = useCallback((mapId: string) => {
     setActiveMapId(mapId)
