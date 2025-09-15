@@ -94,32 +94,9 @@ export function MapComponent({
   // Cache for boundary data to avoid repeated loading
   const boundaryCache = useRef<Map<string, any>>(new Map())
   const loadingPromises = useRef<Map<string, Promise<any>>>(new Map())
+  // Cache for processed mask geometries to avoid heavy re-computation
+  const maskCache = useRef<Map<string, { maskFeature: any, boundaryLayer: VectorLayer<VectorSource> }>>(new Map())
   const [boundaryLoading, setBoundaryLoading] = useState(false)
-
-  // Preload all boundaries on component mount for instant switching
-  useEffect(() => {
-    const preloadBoundaries = async () => {
-      const countries = ['bhutan', 'mongolia', 'laos']
-      console.log('Preloading boundaries for all countries...')
-      
-      // Load all boundaries in parallel in the background
-      const preloadPromises = countries.map(async (country) => {
-        try {
-          await loadBoundaryData(country)
-          console.log('Preloaded boundary for:', country)
-        } catch (error) {
-          console.error('Failed to preload boundary for', country, ':', error)
-        }
-      })
-      
-      await Promise.all(preloadPromises)
-      console.log('All boundaries preloaded successfully')
-    }
-    
-    // Start preloading after a short delay to not interfere with initial load
-    const timer = setTimeout(preloadBoundaries, 1000)
-    return () => clearTimeout(timer)
-  }, [])
   
   // Only show dropdown in multi-map mode (2 or 4 maps)
   const showViewSelector = mapLayout > 1
@@ -411,6 +388,210 @@ export function MapComponent({
     return loadingPromise
   }, [])
 
+  // Create cached mask and boundary layers for a country
+  const createCachedBoundaryLayers = useCallback(async (country: string, boundaryData: any): Promise<{ maskLayer: VectorLayer<VectorSource> | null, boundaryLayer: VectorLayer<VectorSource> }> => {
+    // Check if we already have cached layers for this country
+    if (maskCache.current.has(country)) {
+      console.log('Using cached mask and boundary layers for:', country)
+      const cached = maskCache.current.get(country)!
+      
+      // Clone the layers for reuse (OpenLayers doesn't allow sharing layer instances)
+      const clonedMaskLayer = cached.maskFeature ? new VectorLayer({
+        source: new VectorSource({
+          features: [cached.maskFeature.clone()]
+        }),
+        style: new Style({
+          fill: new Fill({
+            color: 'rgba(128, 128, 128, 0.4)'
+          })
+        }),
+        zIndex: 999
+      }) : null
+      
+      if (clonedMaskLayer) {
+        clonedMaskLayer.set('layerType', 'countryMask')
+      }
+      
+      // Clone boundary layer
+      const originalBoundarySource = cached.boundaryLayer.getSource() as VectorSource
+      const boundaryFeatures = originalBoundarySource.getFeatures()
+      const clonedBoundaryLayer = new VectorLayer({
+        source: new VectorSource({
+          features: boundaryFeatures.map(f => f.clone())
+        }),
+        style: new Style({
+          stroke: new Stroke({
+            color: '#000000',
+            width: 2
+          }),
+          fill: new Fill({
+            color: 'rgba(0, 0, 0, 0)'
+          })
+        }),
+        zIndex: 1000
+      })
+      clonedBoundaryLayer.set('layerType', 'boundary')
+      
+      return { maskLayer: clonedMaskLayer, boundaryLayer: clonedBoundaryLayer }
+    }
+    
+    console.log('Creating new mask and boundary layers for:', country)
+    
+    // Create boundary source
+    const geojsonFormat = new GeoJSON()
+    const boundarySource = new VectorSource()
+    
+    const features = geojsonFormat.readFeatures(boundaryData.geojsonData, {
+      featureProjection: 'EPSG:4326',
+      dataProjection: 'EPSG:4326'
+    })
+    
+    if (Array.isArray(features)) {
+      boundarySource.addFeatures(features)
+    } else {
+      boundarySource.addFeature(features as Feature)
+    }
+    
+    const featuresLoaded = boundarySource.getFeatures().length
+    console.log('Created boundary source with features:', featuresLoaded)
+    
+    if (featuresLoaded === 0) {
+      console.error('No features were loaded into the vector source')
+      throw new Error('No boundary features loaded')
+    }
+    
+    // Create mask layer
+    const worldExtent = [-180, -90, 180, 90]
+    const boundaryFeatures = boundarySource.getFeatures()
+    let maskFeature: Feature | null = null
+    
+    if (boundaryFeatures.length > 0) {
+      try {
+        // Import turf for geometric operations
+        const { union } = await import('@turf/union')
+        const { polygon, multiPolygon, featureCollection } = await import('@turf/helpers')
+        
+        // Convert all boundary features to turf polygons
+        const turfPolygons: any[] = []
+        
+        boundaryFeatures.forEach(feature => {
+          const geom = feature.getGeometry()
+          
+          if (geom?.getType() === 'Polygon') {
+            const coords = (geom as Polygon).getCoordinates()
+            if (coords && coords.length > 0) {
+              turfPolygons.push(polygon(coords))
+            }
+          } else if (geom?.getType() === 'MultiPolygon') {
+            const coords = (geom as MultiPolygon).getCoordinates()
+            turfPolygons.push(multiPolygon(coords))
+          }
+        })
+        
+        console.log('Converting', turfPolygons.length, 'boundary features to unified geometry')
+        
+        // Create a union of all administrative boundaries
+        let unifiedBoundary = turfPolygons[0]
+        for (let i = 1; i < turfPolygons.length; i++) {
+          try {
+            unifiedBoundary = union(featureCollection([unifiedBoundary, turfPolygons[i]]))
+          } catch (unionError) {
+            console.warn('Union operation failed for feature', i, ':', unionError)
+          }
+        }
+        
+        // Extract coordinates from the unified boundary
+        let allExteriorRings: number[][][] = []
+        
+        if (unifiedBoundary && unifiedBoundary.geometry) {
+          if (unifiedBoundary.geometry.type === 'Polygon') {
+            allExteriorRings.push(unifiedBoundary.geometry.coordinates[0])
+          } else if (unifiedBoundary.geometry.type === 'MultiPolygon') {
+            unifiedBoundary.geometry.coordinates.forEach((polygon: number[][][]) => {
+              if (polygon && polygon.length > 0) {
+                allExteriorRings.push(polygon[0])
+              }
+            })
+          }
+        }
+        
+        console.log('Created unified boundary with', allExteriorRings.length, 'exterior rings after union operation')
+        
+        // Create the world polygon with holes for unified boundary exterior rings
+        const maskGeometry = {
+          type: "Polygon",
+          coordinates: [[
+            [worldExtent[0], worldExtent[1]],
+            [worldExtent[2], worldExtent[1]],
+            [worldExtent[2], worldExtent[3]],
+            [worldExtent[0], worldExtent[3]],
+            [worldExtent[0], worldExtent[1]]
+          ], ...allExteriorRings]
+        }
+        
+        // Create a GeoJSON feature object
+        const maskGeoJSON = {
+          type: "Feature",
+          geometry: maskGeometry,
+          properties: {}
+        }
+        
+        maskFeature = geojsonFormat.readFeature(maskGeoJSON, {
+          featureProjection: 'EPSG:4326',
+          dataProjection: 'EPSG:4326'
+        }) as Feature
+        
+        console.log('Created mask feature for caching')
+        
+      } catch (error) {
+        console.error('Error creating mask geometry:', error)
+      }
+    }
+    
+    // Create the boundary layer
+    const boundaryLayer = new VectorLayer({
+      source: boundarySource,
+      style: new Style({
+        stroke: new Stroke({
+          color: '#000000',
+          width: 2
+        }),
+        fill: new Fill({
+          color: 'rgba(0, 0, 0, 0)'
+        })
+      }),
+      zIndex: 1000
+    })
+    boundaryLayer.set('layerType', 'boundary')
+    
+    // Create mask layer if we have a mask feature
+    let maskLayer: VectorLayer<VectorSource> | null = null
+    if (maskFeature) {
+      maskLayer = new VectorLayer({
+        source: new VectorSource({
+          features: [maskFeature]
+        }),
+        style: new Style({
+          fill: new Fill({
+            color: 'rgba(128, 128, 128, 0.4)'
+          })
+        }),
+        zIndex: 999
+      })
+      maskLayer.set('layerType', 'countryMask')
+    }
+    
+    // Cache the created layers and mask feature
+    maskCache.current.set(country, {
+      maskFeature,
+      boundaryLayer
+    })
+    
+    console.log('Cached mask and boundary layers for:', country)
+    
+    return { maskLayer, boundaryLayer }
+  }, [])
+
   // Load boundary layer for the current country
   useEffect(() => {
     if (!mapInstanceRef.current) return
@@ -465,187 +646,10 @@ export function MapComponent({
         console.log('First feature geometry:', geojsonData.features[0]?.geometry)
         console.log('First feature properties:', geojsonData.features[0]?.properties)
         
-        // Create vector source and layer with more detailed error handling
-        let boundarySource: VectorSource
-        try {
-          const geojsonFormat = new GeoJSON()
-          console.log('Reading features with GeoJSON format...')
-          
-          const features = geojsonFormat.readFeatures(geojsonData, {
-            featureProjection: 'EPSG:4326',
-            dataProjection: 'EPSG:4326'
-          })
-          
-          console.log('Features read successfully:', features.length)
-          
-          // Log feature details
-          if (features.length > 0) {
-            const firstFeature = features[0]
-            console.log('First feature geometry type:', firstFeature.getGeometry()?.getType())
-            console.log('First feature extent:', firstFeature.getGeometry()?.getExtent())
-            console.log('First feature properties:', firstFeature.getProperties())
-          }
-          
-          boundarySource = new VectorSource({
-            features: features
-          })
-          
-          console.log('Boundary source created with features:', boundarySource.getFeatures().length)
-          
-        } catch (error) {
-          console.error('Error reading GeoJSON features:', error)
-          return
-        }
+        // Use cached mask and boundary creation
+        const { maskLayer, boundaryLayer } = await createCachedBoundaryLayers(country, boundaryData)
         
-        const featuresLoaded = boundarySource.getFeatures().length
-        console.log('Created boundary source with features:', featuresLoaded)
-        
-        if (featuresLoaded === 0) {
-          console.error('No features were loaded into the vector source')
-          return
-        }
-        
-        // Create a mask layer that covers the entire world and greys out areas outside the boundary
-        const worldExtent = [-180, -90, 180, 90]
-        
-        // Get the boundary geometry to create holes in the mask
-        const boundaryFeatures = boundarySource.getFeatures()
-        let maskLayer: VectorLayer<VectorSource> | null = null
-        
-        if (boundaryFeatures.length > 0) {
-          try {
-            // For Mongolia and other countries with administrative subdivisions,
-            // we need to create a union of all polygons rather than treating each as separate holes
-            
-            // Import turf for geometric operations
-            const { union } = await import('@turf/union')
-            const { polygon, multiPolygon, featureCollection } = await import('@turf/helpers')
-            
-            // Convert all boundary features to turf polygons
-            const turfPolygons: any[] = []
-            
-            boundaryFeatures.forEach(feature => {
-              const geom = feature.getGeometry()
-              
-              if (geom?.getType() === 'Polygon') {
-                const coords = (geom as Polygon).getCoordinates()
-                if (coords && coords.length > 0) {
-                  turfPolygons.push(polygon(coords))
-                }
-              } else if (geom?.getType() === 'MultiPolygon') {
-                const coords = (geom as MultiPolygon).getCoordinates()
-                turfPolygons.push(multiPolygon(coords))
-              }
-            })
-            
-            console.log('Converting', turfPolygons.length, 'boundary features to unified geometry')
-            
-            // Create a union of all administrative boundaries
-            let unifiedBoundary = turfPolygons[0]
-            for (let i = 1; i < turfPolygons.length; i++) {
-              try {
-                unifiedBoundary = union(featureCollection([unifiedBoundary, turfPolygons[i]]))
-              } catch (unionError) {
-                console.warn('Union operation failed for feature', i, ':', unionError)
-                // Continue with current unified boundary
-              }
-            }
-            
-            // Extract coordinates from the unified boundary
-            let allExteriorRings: number[][][] = []
-            
-            if (unifiedBoundary && unifiedBoundary.geometry) {
-              if (unifiedBoundary.geometry.type === 'Polygon') {
-                // Single polygon - add exterior ring only
-                allExteriorRings.push(unifiedBoundary.geometry.coordinates[0])
-              } else if (unifiedBoundary.geometry.type === 'MultiPolygon') {
-                // Multiple polygons - add each exterior ring
-                unifiedBoundary.geometry.coordinates.forEach((polygon: number[][][]) => {
-                  if (polygon && polygon.length > 0) {
-                    allExteriorRings.push(polygon[0]) // Only exterior ring
-                  }
-                })
-              }
-            }
-            
-            console.log('Created unified boundary with', allExteriorRings.length, 'exterior rings after union operation')
-            
-            // Create the world polygon with holes for unified boundary exterior rings
-            const maskGeometry = {
-              type: "Polygon",
-              coordinates: [[
-                [worldExtent[0], worldExtent[1]], // bottom-left
-                [worldExtent[2], worldExtent[1]], // bottom-right
-                [worldExtent[2], worldExtent[3]], // top-right
-                [worldExtent[0], worldExtent[3]], // top-left
-                [worldExtent[0], worldExtent[1]]  // close polygon
-              ], ...allExteriorRings] // Add unified boundary rings as holes in the world mask
-            }
-            
-            // Create mask source and layer
-            const maskSource = new VectorSource()
-            const geojsonFormat = new GeoJSON()
-            
-            // Create a GeoJSON feature object
-            const maskGeoJSON = {
-              type: "Feature",
-              geometry: maskGeometry,
-              properties: {}
-            }
-            
-            try {
-              const maskFeature = geojsonFormat.readFeature(maskGeoJSON, {
-                featureProjection: 'EPSG:4326',
-                dataProjection: 'EPSG:4326'
-              })
-              
-              if (Array.isArray(maskFeature)) {
-                maskSource.addFeatures(maskFeature)
-              } else {
-                maskSource.addFeature(maskFeature)
-              }
-              
-              maskLayer = new VectorLayer({
-                source: maskSource,
-                style: new Style({
-                  fill: new Fill({
-                    color: 'rgba(128, 128, 128, 0.4)' // Grey overlay with 40% opacity
-                  })
-                }),
-                zIndex: 999 // Below boundary but above basemap
-              })
-              
-              maskLayer.set('layerType', 'countryMask')
-              console.log('Created country mask layer')
-              
-            } catch (error) {
-              console.error('Error creating mask feature:', error)
-            }
-            
-          } catch (error) {
-            console.error('Error creating mask geometry:', error)
-          }
-        }
-        
-        // Create the boundary layer with black stroke and no fill
-        const boundaryLayer = new VectorLayer({
-          source: boundarySource,
-          style: new Style({
-            stroke: new Stroke({
-              color: '#000000', // Black border
-              width: 2
-            }),
-            fill: new Fill({
-              color: 'rgba(0, 0, 0, 0)' // Transparent fill - no red tint
-            })
-          }),
-          zIndex: 1000 // Ensure it's on top
-        })
-        
-        // Set layer type for identification
-        boundaryLayer.set('layerType', 'boundary')
-        
-        console.log('Created boundary and mask layers')
+        console.log('Retrieved/created boundary and mask layers from cache')
         
         // Add both layers to the map
         if (maskLayer) {
@@ -666,6 +670,7 @@ export function MapComponent({
         console.log('Boundary layer z-index:', boundaryLayer.getZIndex())
         
         // Get the extent of all features and log it
+        const boundarySource = boundaryLayer.getSource() as VectorSource
         const extent = boundarySource.getExtent()
         console.log('Boundary source extent:', extent)
         console.log('Expected country bounds:', countryBounds[country as keyof typeof countryBounds])
@@ -989,6 +994,35 @@ export function MapComponent({
   ]
   
   const currentViewOption = viewModeOptions.find(option => option.value === viewMode)
+
+  // Preload all boundaries and mask layers on component mount for instant switching
+  useEffect(() => {
+    const preloadBoundaries = async () => {
+      const countries = ['bhutan', 'mongolia', 'laos']
+      console.log('Preloading boundaries and mask layers for all countries...')
+      
+      // Load all boundaries and create cached mask layers in parallel in the background
+      const preloadPromises = countries.map(async (country) => {
+        try {
+          const boundaryData = await loadBoundaryData(country)
+          if (boundaryData) {
+            // Also create and cache the mask layers
+            await createCachedBoundaryLayers(country, boundaryData)
+            console.log('Preloaded boundary and mask layers for:', country)
+          }
+        } catch (error) {
+          console.error('Failed to preload boundary for', country, ':', error)
+        }
+      })
+      
+      await Promise.all(preloadPromises)
+      console.log('All boundaries and mask layers preloaded successfully')
+    }
+    
+    // Start preloading after a short delay to not interfere with initial load
+    const timer = setTimeout(preloadBoundaries, 1000)
+    return () => clearTimeout(timer)
+  }, [loadBoundaryData, createCachedBoundaryLayers])
 
   return (
     <div className={`flex flex-col h-full border-2 rounded-lg overflow-hidden bg-white ${isActive ? 'border-primary' : 'border-border'}`}>
