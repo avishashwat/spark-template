@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { SignOut, Database, Upload, MapPin, Gear, ArrowLeft, Globe } from '@phosphor-icons/react'
+import { SignOut, Database, Upload, MapPin, Gear, ArrowLeft, Globe, HardDrives } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { DataLayerManager } from './DataLayerManager'
 import { FileUploadManager } from './FileUploadManager'
@@ -86,7 +86,7 @@ export function AdminPanel({ onShowInfrastructure }: { onShowInfrastructure?: ()
           <div className="flex items-center space-x-4">
             {onShowInfrastructure && (
               <Button variant="ghost" size="sm" onClick={onShowInfrastructure} className="flex items-center gap-2">
-                <Database size={16} />
+                <HardDrives size={16} />
                 Infrastructure
               </Button>
             )}

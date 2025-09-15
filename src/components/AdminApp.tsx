@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { AdminAuth } from './admin/AdminAuth'
 import { AdminPanel } from './admin/AdminPanel'
 import { GeospatialInfrastructure } from './GeospatialInfrastructure'
+import { Button } from '@/components/ui/button'
+import { HardDrives } from '@phosphor-icons/react'
 
 export function AdminApp() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -53,7 +55,21 @@ export function AdminApp() {
   }
 
   if (showInfrastructure) {
-    return <GeospatialInfrastructure />
+    return (
+      <div>
+        <div className="fixed top-4 right-4 z-50">
+          <Button
+            variant="outline"
+            onClick={() => setShowInfrastructure(false)}
+            className="flex items-center gap-2"
+          >
+            <HardDrives className="w-4 h-4" />
+            Back to Admin Panel
+          </Button>
+        </div>
+        <GeospatialInfrastructure />
+      </div>
+    )
   }
 
   return <AdminPanel onShowInfrastructure={() => setShowInfrastructure(true)} />
