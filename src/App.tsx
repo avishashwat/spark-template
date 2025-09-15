@@ -4,7 +4,9 @@ import { MapComponent } from '@/components/MapComponent'
 import { Sidebar } from '@/components/Sidebar'
 import { Dashboard } from '@/components/Dashboard'
 import { AdminApp } from '@/components/AdminApp'
+import { CollaborationPanel } from '@/components/CollaborationPanel'
 import { useMockData } from '@/hooks/useMockData'
+import { useCollaboration } from '@/hooks/useCollaboration'
 import { useKV } from '@github/spark/hooks'
 import { Toaster } from 'sonner'
 
@@ -26,10 +28,14 @@ function MainApp() {
   // Initialize mock data
   useMockData()
   
+  // Collaboration hook
+  const collaboration = useCollaboration()
+  
   const [selectedCountry, setSelectedCountry] = useState('bhutan')
   const [mapLayout, setMapLayout] = useState(1)
   const [showDashboard, setShowDashboard] = useState(false)
   const [showSidebar, setShowSidebar] = useState(true)
+  const [showCollaboration, setShowCollaboration] = useState(false)
   const [activeMapId, setActiveMapId] = useState('map-1')
   const [basemap, setBasemap] = useState('osm')
   const [sharedView, setSharedView] = useState<{ center: [number, number], zoom: number }>({
@@ -112,8 +118,56 @@ function MainApp() {
     return () => clearTimeout(timer)
   }, [])
 
+  // Collaboration event listeners
+  useEffect(() => {
+    const handleViewSync = (event: CustomEvent) => {
+      const { center, zoom, fromCollaboration } = event.detail
+      if (fromCollaboration) {
+        setSharedView({ center, zoom })
+      }
+    }
+    
+    const handleLayerSync = (event: CustomEvent) => {
+      const { mapId, layers, action, fromCollaboration } = event.detail
+      if (fromCollaboration) {
+        if (action === 'remove') {
+          setMapOverlays(prev => {
+            const updated = { ...prev }
+            delete updated[mapId]
+            return updated
+          })
+        } else {
+          setMapOverlays(prev => ({
+            ...prev,
+            [mapId]: layers
+          }))
+        }
+      }
+    }
+    
+    const handleCountrySync = (event: CustomEvent) => {
+      const { country, fromCollaboration } = event.detail
+      if (fromCollaboration) {
+        setSelectedCountry(country)
+      }
+    }
+    
+    window.addEventListener('collaboration_sync_view', handleViewSync as EventListener)
+    window.addEventListener('collaboration_sync_layers', handleLayerSync as EventListener)
+    window.addEventListener('collaboration_sync_country', handleCountrySync as EventListener)
+    
+    return () => {
+      window.removeEventListener('collaboration_sync_view', handleViewSync as EventListener)
+      window.removeEventListener('collaboration_sync_layers', handleLayerSync as EventListener)
+      window.removeEventListener('collaboration_sync_country', handleCountrySync as EventListener)
+    }
+  }, [])
+
   const handleCountryChange = useCallback((country: string) => {
     setSelectedCountry(country)
+    
+    // Broadcast to collaboration
+    collaboration.broadcastCountryChange(country)
     
     // Clear overlays when changing country
     setMapOverlays({})
@@ -137,7 +191,7 @@ function MainApp() {
     const countryConfig = countryBounds[country as keyof typeof countryBounds]
     const adjustedZoom = getCountryZoom(countryConfig.baseZoom)
     setSharedView({ center: countryConfig.center, zoom: adjustedZoom })
-  }, [mapLayout])
+  }, [mapLayout, collaboration])
 
   const handleLayoutChange = useCallback((layout: number) => {
     setMapLayout(layout)
@@ -172,7 +226,12 @@ function MainApp() {
 
   const handleViewChange = useCallback((center: [number, number], zoom: number) => {
     setSharedView({ center, zoom })
-  }, [])
+    
+    // Broadcast to collaboration if connected
+    if (collaboration.isConnected) {
+      collaboration.broadcastViewChange(center, zoom, activeMapId)
+    }
+  }, [collaboration, activeMapId])
 
   const handleLayerChange = useCallback((mapId: string, layer: any, action: 'add' | 'remove' = 'add') => {
     // Handle layer changes for specific map
@@ -195,19 +254,27 @@ function MainApp() {
           }
         }
         
-        return {
+        const newState = {
           ...prev,
           [mapId]: updatedOverlays
         }
+        
+        // Broadcast to collaboration
+        if (collaboration.isConnected) {
+          collaboration.broadcastLayerChange(mapId, updatedOverlays)
+        }
+        
+        return newState
       })
     } else if (action === 'remove') {
       // Remove specific overlay category or all overlays
       setMapOverlays(prev => {
+        let newState
+        
         if (!layer) {
           // Remove all overlays for this map
-          const updated = { ...prev }
-          delete updated[mapId]
-          return updated
+          newState = { ...prev }
+          delete newState[mapId]
         } else {
           // Remove specific category overlay
           const currentOverlays = prev[mapId] || {}
@@ -216,19 +283,25 @@ function MainApp() {
           
           if (Object.keys(updatedOverlays).length === 0) {
             // If no overlays left, remove the map entry
-            const updated = { ...prev }
-            delete updated[mapId]
-            return updated
+            newState = { ...prev }
+            delete newState[mapId]
           } else {
-            return {
+            newState = {
               ...prev,
               [mapId]: updatedOverlays
             }
           }
         }
+        
+        // Broadcast to collaboration
+        if (collaboration.isConnected) {
+          collaboration.broadcastLayerChange(mapId, newState[mapId] || {}, action)
+        }
+        
+        return newState
       })
     }
-  }, [])
+  }, [collaboration])
 
   const handleBasemapChange = useCallback((newBasemap: string) => {
     setBasemap(newBasemap)
@@ -293,13 +366,24 @@ function MainApp() {
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
         {showSidebar && (
-          <div className="w-80 flex-shrink-0">
-            <Sidebar
-              activeMapId={activeMapId}
-              onLayerChange={handleLayerChange}
-              mapLayout={mapLayout} // Pass layout to clear layers on change
-              selectedCountry={selectedCountry} // Pass country to clear layers on change
-            />
+          <div className="w-80 flex-shrink-0 flex flex-col">
+            <div className="flex-1">
+              <Sidebar
+                activeMapId={activeMapId}
+                onLayerChange={handleLayerChange}
+                mapLayout={mapLayout} // Pass layout to clear layers on change
+                selectedCountry={selectedCountry} // Pass country to clear layers on change
+              />
+            </div>
+            
+            {/* Collaboration Panel */}
+            <div className="border-t p-2">
+              <CollaborationPanel 
+                onSessionStart={(sessionId) => {
+                  console.log('Collaboration session started:', sessionId)
+                }}
+              />
+            </div>
           </div>
         )}
         
