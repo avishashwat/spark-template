@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Globe, MapPin, ChartBar, Sidebar as SidebarIcon } from '@phosphor-icons/react'
+import { Globe, MapPin, ChartBar, Sidebar as SidebarIcon, GearSix } from '@phosphor-icons/react'
 
 interface HeaderProps {
   selectedCountry: string
@@ -83,6 +83,21 @@ export function Header({
         </div>
 
         <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              // Navigate to admin panel
+              const currentUrl = new URL(window.location.href)
+              currentUrl.searchParams.set('admin', 'true')
+              window.location.href = currentUrl.toString()
+            }}
+            className="flex items-center gap-2 h-7 px-2 text-xs"
+          >
+            <GearSix className="w-4 h-4" />
+            Admin
+          </Button>
+          
           <Button
             variant={showSidebar ? "default" : "outline"}
             size="sm"

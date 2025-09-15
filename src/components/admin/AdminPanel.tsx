@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { SignOut, Database, Upload, MapPin, Gear, ArrowLeft } from '@phosphor-icons/react'
+import { SignOut, Database, Upload, MapPin, Gear, ArrowLeft, Globe } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { DataLayerManager } from './DataLayerManager'
 import { FileUploadManager } from './FileUploadManager'
@@ -84,9 +84,9 @@ export function AdminPanel() {
           </div>
           
           <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="sm" onClick={handleBackToApp}>
-              <ArrowLeft size={16} className="mr-2" />
-              Back to App
+            <Button variant="ghost" size="sm" onClick={handleBackToApp} className="flex items-center gap-2">
+              <Globe size={16} />
+              Back to Map
             </Button>
             {user && (
               <div className="flex items-center space-x-2 text-sm">

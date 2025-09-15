@@ -4,7 +4,6 @@ import { MapComponent } from '@/components/MapComponent'
 import { Sidebar } from '@/components/Sidebar'
 import { Dashboard } from '@/components/Dashboard'
 import { AdminApp } from '@/components/AdminApp'
-import { AdminAccessCard } from '@/components/AdminAccessCard'
 import { useMockData } from '@/hooks/useMockData'
 import { useKV } from '@github/spark/hooks'
 import { Toaster } from 'sonner'
@@ -37,7 +36,6 @@ function MainApp() {
     center: [90.433601, 27.514162], // Bhutan center
     zoom: 7.5 // Better initial zoom that works well for single map
   })
-  const [showAdminCard, setShowAdminCard] = useState(true)
   
   // Store overlay information for each map
   const [mapOverlays, setMapOverlays] = useState<Record<string, any>>({})
@@ -256,7 +254,7 @@ function MainApp() {
       <Toaster position="bottom-right" />
       
       {/* Admin Access Card */}
-      {showAdminCard && <AdminAccessCard />}
+      {/* Removed - replaced with header button */}
     </div>
   )
 }
