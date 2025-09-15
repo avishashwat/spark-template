@@ -31,7 +31,7 @@ function App() {
   const [basemap, setBasemap] = useState('osm')
   const [sharedView, setSharedView] = useState<{ center: [number, number], zoom: number }>({
     center: [90.433601, 27.514162], // Bhutan center
-    zoom: 8 // Higher zoom for province visibility
+    zoom: 9 // Higher zoom for better country fit
   })
   
   // Store overlay information for each map
@@ -43,11 +43,11 @@ function App() {
     // Clear overlays when changing country
     setMapOverlays({})
     
-    // Update shared view based on country with better bounds for Bhutan
+    // Update shared view based on country with better bounds to fit country properly
     const countryBounds = {
-      bhutan: { center: [90.433601, 27.514162] as [number, number], zoom: 8 }, // Higher zoom for province visibility
-      mongolia: { center: [103.835, 46.862] as [number, number], zoom: 5 }, 
-      laos: { center: [103.865, 18.220] as [number, number], zoom: 6 }
+      bhutan: { center: [90.433601, 27.514162] as [number, number], zoom: 9 }, // Increased zoom for better fit
+      mongolia: { center: [103.835, 46.862] as [number, number], zoom: 6 }, // Increased zoom for better fit
+      laos: { center: [103.865, 18.220] as [number, number], zoom: 7 } // Increased zoom for better fit
     }
     
     const countryConfig = countryBounds[country as keyof typeof countryBounds]

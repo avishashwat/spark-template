@@ -189,14 +189,14 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
   return (
     <>
       <Card className="h-full rounded-none border-y-0 border-l-0">
-        <CardHeader className="pb-3 px-4 pt-4">
-          <CardTitle className="flex items-center gap-2 text-base">
+        <CardHeader className="pb-2 px-4 pt-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
             <Stack className="w-4 h-4 text-primary" />
             Layer Controls
           </CardTitle>
         </CardHeader>
         
-        <CardContent className="space-y-4 custom-scroll overflow-y-auto max-h-[calc(100vh-120px)] px-4">
+        <CardContent className="space-y-3 custom-scroll overflow-y-auto max-h-[calc(100vh-120px)] px-4">
           {/* Data Categories */}
           <div className="space-y-2">
             <h3 className="font-medium text-xs text-muted-foreground">DATA LAYERS</h3>
@@ -208,7 +208,7 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
               ].map(({ id, label, icon: Icon, color }) => (
                 <button
                   key={id}
-                  className={`flex items-center justify-start w-full h-12 text-sm px-4 border-2 rounded-md transition-all duration-200 hover:bg-primary/10 hover:border-primary/30 ${
+                  className={`flex items-center justify-start w-full h-10 text-sm px-3 border-2 rounded-md transition-all duration-200 hover:bg-primary/10 hover:border-primary/30 ${
                     selectedCategory === id ? 'bg-primary/10 border-primary/30' : 'bg-white border-border'
                   }`}
                   onClick={() => handleCategoryChange(id)}
@@ -223,7 +223,7 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
 
           {/* Selection Panel */}
           {selectedCategory && (
-            <div className="space-y-3 border rounded-lg p-3 bg-blue-50/50 border-primary/20">
+            <div className="space-y-2 border rounded-lg p-2 bg-blue-50/50 border-primary/20">
               <div className="flex items-center justify-between">
                 <h4 className="font-medium text-sm text-primary">
                   {selectedCategory === 'climate' && 'Climate Variables'}
@@ -406,7 +406,7 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
           {/* Active Layers */}
           {activeLayers.length > 0 && (
             <>
-              <Separator className="my-3" />
+              <Separator className="my-2" />
               <div className="space-y-2">
                 <h3 className="font-medium text-xs text-muted-foreground">ACTIVE LAYERS</h3>
                 <div className="space-y-2">

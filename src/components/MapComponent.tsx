@@ -405,20 +405,47 @@ export function MapComponent({
                 </div>
               )}
               
-              {/* North Arrow - Smaller Design */}
+              {/* North Arrow - Size based on layout */}
               <div className="absolute top-2 right-2 bg-white/90 border border-border rounded p-1 shadow-sm north-arrow">
                 <div className="flex flex-col items-center">
-                  <svg width="12" height="16" viewBox="0 0 12 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path 
-                      d="M6 0L8 6L6 5L4 6L6 0Z" 
-                      fill="#0072bc"
-                    />
-                    <path 
-                      d="M6 16L8 10L6 11L4 10L6 16Z" 
-                      fill="#666"
-                    />
-                  </svg>
-                  <span className="text-[9px] font-medium text-foreground">N</span>
+                  {mapLayout === 1 ? (
+                    // Larger north arrow for single map view
+                    <svg width="18" height="24" viewBox="0 0 18 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path 
+                        d="M9 0L12 9L9 7.5L6 9L9 0Z" 
+                        fill="#0072bc"
+                      />
+                      <path 
+                        d="M9 24L12 15L9 16.5L6 15L9 24Z" 
+                        fill="#666"
+                      />
+                    </svg>
+                  ) : mapLayout === 2 ? (
+                    // Medium north arrow for 2-map view
+                    <svg width="15" height="20" viewBox="0 0 15 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path 
+                        d="M7.5 0L10 7.5L7.5 6.25L5 7.5L7.5 0Z" 
+                        fill="#0072bc"
+                      />
+                      <path 
+                        d="M7.5 20L10 12.5L7.5 13.75L5 12.5L7.5 20Z" 
+                        fill="#666"
+                      />
+                    </svg>
+                  ) : (
+                    // Smallest north arrow for 4-map view
+                    <svg width="12" height="16" viewBox="0 0 12 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path 
+                        d="M6 0L8 6L6 5L4 6L6 0Z" 
+                        fill="#0072bc"
+                      />
+                      <path 
+                        d="M6 16L8 10L6 11L4 10L6 16Z" 
+                        fill="#666"
+                      />
+                    </svg>
+                  )}
+                  <span className={`font-medium text-foreground ${mapLayout === 1 ? 'text-xs' : mapLayout === 2 ? 'text-[10px]' : 'text-[9px]'}`}>N</span>
                 </div>
               </div>
             </div>

@@ -102,6 +102,15 @@
   max-width: 80px;
 }
 
+/* Hide the ratio text above the scale bar */
+.ol-scale-line::before {
+  display: none !important;
+}
+
+.ol-scale-text {
+  display: none !important;
+}
+
 .ol-scale-line-inner {
   border: none !important;
   border-bottom: 1.5px solid #333 !important;
