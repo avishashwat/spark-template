@@ -196,7 +196,9 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout, selectedCountry
       setActiveLayers(prev => [...prev.filter(layer => !layersToRemove.includes(layer.id)), newLayer])
       onLayerChange(activeMapId, layerInfo, 'add')
       
-      // Keep selection panel open and reset selections for easy re-use
+      // Hide selection panel after successful layer addition
+      setShowSelectionPanel(false)
+      setSelectedCategory('')
       resetSelections()
     }
   }
