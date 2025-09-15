@@ -1,51 +1,71 @@
 # UN ESCAP Climate & Energy Risk Admin Panel - PRD
 
 ## Core Purpose & Success
-- **Mission Statement**: Provide UN ESCAP administrators with a secure, intuitive interface to manage geospatial data layers, upload files, and configure visualizations for the climate and energy risk platform.
-- **Success Indicators**: Streamlined data upload process, consistent file organization, reduced manual configuration time, and error-free layer management.
+- **Mission Statement**: Provide UN ESCAP administrators with a secure, comprehensive interface to manage geospatial data layers, upload files, configure visualizations, and maintain the climate and energy risk platform.
+- **Success Indicators**: Streamlined data upload process, consistent file organization, reduced manual configuration time, error-free layer management, and improved data accessibility.
 - **Experience Qualities**: Professional, Efficient, Secure
 
 ## Project Classification & Approach
-- **Complexity Level**: Complex Application (advanced functionality, authentication, file management)
-- **Primary User Activity**: Creating and Managing (uploading files, configuring layers, setting classifications)
+- **Complexity Level**: Complex Application (advanced functionality, authentication, file management, data processing)
+- **Primary User Activity**: Creating and Managing (uploading files, configuring layers, setting classifications, managing boundaries)
 
 ## Thought Process for Feature Selection
-- **Core Problem Analysis**: Administrators need to efficiently upload and manage large volumes of geospatial data with complex classification schemes and visualization settings.
-- **User Context**: Technical administrators working with climate and energy datasets, requiring precise control over data presentation and organization.
-- **Critical Path**: Authentication → Data Upload → Classification Configuration → Layer Management → Deployment
-- **Key Moments**: Secure login, file upload with validation, classification setup, preview and confirmation
+- **Core Problem Analysis**: Administrators need to efficiently upload and manage large volumes of geospatial data with complex classification schemes, visualization settings, and boundary management.
+- **User Context**: Technical administrators working with climate and energy datasets, requiring precise control over data presentation, organization, and system configuration.
+- **Critical Path**: Authentication → Data Layer Setup → File Upload → Classification Configuration → Boundary Management → System Settings → Deployment
+- **Key Moments**: Secure login, data layer creation, file upload with validation, classification setup, boundary configuration, preview and confirmation
 
 ## Essential Features
 
 ### Authentication System
-- **Functionality**: Secure login/logout with GitHub integration using spark.user()
-- **Purpose**: Protect admin functions and track administrative actions
-- **Success Criteria**: Only authorized users can access admin panel
+- **Functionality**: Secure login/logout with GitHub integration using spark.user() and session management
+- **Purpose**: Protect admin functions, track administrative actions, and ensure only authorized access
+- **Success Criteria**: Only application owner can access admin panel with persistent session
+
+### Data Layer Management
+- **Functionality**: Create, edit, and delete data layer configurations for climate, GIRI, and energy variables
+- **Purpose**: Define available data types, scenarios, seasonality options, and year ranges
+- **Success Criteria**: All layer types properly configured with appropriate options
 
 ### File Upload Management
-- **Functionality**: Handle TIF raster uploads and shapefile bundles (.shp, .shx, .dbf, .prj)
-- **Purpose**: Centralized data ingestion with automatic organization
-- **Success Criteria**: Files uploaded successfully with proper naming conventions
+- **Functionality**: Handle TIF/COG raster uploads, shapefile bundles (.zip), and icon files with validation
+- **Purpose**: Centralized data ingestion with automatic organization and format validation
+- **Success Criteria**: Files uploaded successfully with proper naming conventions and validation
 
 ### Raster Classification System
-- **Functionality**: Display raster statistics, configure 5-class classifications with color schemes
-- **Purpose**: Enable precise control over data visualization and legend generation
-- **Success Criteria**: Classifications created efficiently with proper validation
+- **Functionality**: Display raster statistics (min/max/mean), configure 5-class classifications with custom color schemes
+- **Purpose**: Enable precise control over data visualization, legend generation, and thematic mapping
+- **Success Criteria**: Classifications created efficiently with proper validation and color accessibility
 
 ### Shapefile Attribute Management
-- **Functionality**: Attribute inspection, design capacity selection, icon configuration
-- **Purpose**: Configure point visualization with appropriate sizing and symbolization
-- **Success Criteria**: Point layers display correctly with proper scaling and icons
+- **Functionality**: Attribute inspection, design capacity field selection, custom icon upload and configuration
+- **Purpose**: Configure point visualization with appropriate sizing, symbolization, and capacity-based scaling
+- **Success Criteria**: Point layers display correctly with proper scaling, icons, and attribute-based sizing
+
+### Boundary Management
+- **Functionality**: Upload administrative boundary shapefiles, configure hover attributes, and manage administrative levels
+- **Purpose**: Enable country-specific zooming, region highlighting, and administrative area display
+- **Success Criteria**: Boundaries load correctly with proper hover effects and country-based zooming
 
 ### Template System
-- **Functionality**: Save and reuse classification schemes, color palettes, and configurations
-- **Purpose**: Reduce repetitive configuration work and ensure consistency
-- **Success Criteria**: Previous configurations can be applied to new datasets
+- **Functionality**: Save and reuse classification schemes, color palettes, capacity attributes, and icon sets
+- **Purpose**: Reduce repetitive configuration work, ensure consistency, and speed up data processing
+- **Success Criteria**: Previous configurations can be applied to new datasets with one-click selection
+
+### System Settings
+- **Functionality**: Configure application settings, backup data, manage cache, and control system behavior
+- **Purpose**: Provide comprehensive system administration and maintenance capabilities
+- **Success Criteria**: System operates efficiently with proper backup and configuration management
 
 ### Directory Management
-- **Functionality**: Automatic file organization following established naming conventions
-- **Purpose**: Maintain structured data organization for efficient retrieval
+- **Functionality**: Automatic file organization following established naming conventions with country/type/layer structure
+- **Purpose**: Maintain structured data organization for efficient retrieval and systematic access
 - **Success Criteria**: Files organized predictably and accessible to main application
+
+### COG Conversion Utility
+- **Functionality**: Provide script and guidance for converting TIF files to Cloud Optimized GeoTIFF format
+- **Purpose**: Optimize raster performance for web display and faster loading
+- **Success Criteria**: Rasters load quickly with minimal loading time and smooth overlay transitions
 
 ## Design Direction
 

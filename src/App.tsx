@@ -1,8 +1,10 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { Header } from '@/components/Header'
 import { MapComponent } from '@/components/MapComponent'
 import { Sidebar } from '@/components/Sidebar'
 import { Dashboard } from '@/components/Dashboard'
+import { AdminApp } from '@/components/AdminApp'
+import { AdminAccessCard } from '@/components/AdminAccessCard'
 import { useMockData } from '@/hooks/useMockData'
 import { useKV } from '@github/spark/hooks'
 import { Toaster } from 'sonner'
@@ -21,7 +23,7 @@ interface MapInstance {
   }
 }
 
-function App() {
+function MainApp() {
   // Initialize mock data
   useMockData()
   
@@ -35,6 +37,7 @@ function App() {
     center: [90.433601, 27.514162], // Bhutan center
     zoom: 7.5 // Better initial zoom that works well for single map
   })
+  const [showAdminCard, setShowAdminCard] = useState(true)
   
   // Store overlay information for each map
   const [mapOverlays, setMapOverlays] = useState<Record<string, any>>({})
@@ -251,8 +254,37 @@ function App() {
       
       {/* Toast notifications */}
       <Toaster position="bottom-right" />
+      
+      {/* Admin Access Card */}
+      {showAdminCard && <AdminAccessCard />}
     </div>
   )
+}
+
+function App() {
+  // Check if we're on the admin route
+  const [isAdminMode, setIsAdminMode] = useState(false)
+  
+  useEffect(() => {
+    // Check URL or other conditions to determine admin mode
+    const searchParams = new URLSearchParams(window.location.search)
+    if (searchParams.get('admin') === 'true' || window.location.pathname.includes('admin')) {
+      setIsAdminMode(true)
+    }
+  }, [])
+
+  // If admin mode, render admin app
+  if (isAdminMode) {
+    return (
+      <div className="h-screen bg-background">
+        <AdminApp />
+        <Toaster position="bottom-right" />
+      </div>
+    )
+  }
+
+  // Otherwise render main app
+  return <MainApp />
 }
 
 export default App

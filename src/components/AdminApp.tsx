@@ -1,47 +1,38 @@
 import React, { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { User } from '@phosphor-icons/react'
+import { AdminAuth } from './admin/AdminAuth'
 import { AdminPanel } from './admin/AdminPanel'
-import { toast } from 'sonner'
-
-interface UserInfo {
-  avatarUrl: string
-  email: string
-  id: string
-  isOwner: boolean
-  login: string
-}
 
 export function AdminApp() {
-  const [user, setUser] = useState<UserInfo | null>(null)
-  const [loading, setLoading] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        // Use the global spark object to get user info
-        const userInfo = await (window as any).spark.user()
-        setUser(userInfo)
-        setIsAuthenticated(true)
-      } catch (error) {
-        console.error('Authentication failed:', error)
-        setIsAuthenticated(false)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    checkAuth()
+    checkExistingAuth()
   }, [])
 
-  const handleLogout = () => {
-    setUser(null)
-    setIsAuthenticated(false)
-    toast.success('Logged out successfully')
+  const checkExistingAuth = async () => {
+    try {
+      const authData = await window.spark.kv.get<any>('admin_authenticated')
+      
+      if (authData && authData.expires > Date.now()) {
+        // Check if user is still owner
+        const user = await window.spark.user()
+        if (user?.isOwner) {
+          setIsAuthenticated(true)
+        } else {
+          // Clean up invalid auth
+          await window.spark.kv.delete('admin_authenticated')
+        }
+      }
+    } catch (error) {
+      console.error('Auth check failed:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAuthenticated = () => {
+    setIsAuthenticated(true)
   }
 
   if (loading) {
@@ -49,37 +40,15 @@ export function AdminApp() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Checking authentication...</p>
+          <p className="text-muted-foreground">Loading admin panel...</p>
         </div>
       </div>
     )
   }
 
-  if (!isAuthenticated || !user) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="w-96">
-          <CardHeader className="text-center">
-            <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
-              <User className="w-8 h-8 text-primary-foreground" />
-            </div>
-            <CardTitle>UN ESCAP Admin Panel</CardTitle>
-            <CardDescription>
-              Authentication required to access the admin panel
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-center">
-            <p className="text-sm text-muted-foreground mb-4">
-              Please ensure you are logged in with an account that has admin privileges.
-            </p>
-            <Button onClick={() => window.location.reload()} className="w-full">
-              Try Again
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
+  if (!isAuthenticated) {
+    return <AdminAuth onAuthenticated={handleAuthenticated} />
   }
 
-  return <AdminPanel onLogout={handleLogout} />
+  return <AdminPanel />
 }

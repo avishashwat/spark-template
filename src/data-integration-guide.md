@@ -1,501 +1,339 @@
-# Data Integration Guide for UN ESCAP Climate & Energy Risk Visualization
+# UN ESCAP Data Integration Guide
 
 ## Overview
-This guide explains how to prepare and integrate your geospatial data (TIF rasters, shapefiles, and Excel classifications) for optimal performance in the web application.
 
-## Data Structure Requirements
+This guide provides comprehensive instructions for uploading and managing geospatial data in the UN ESCAP Climate & Energy Risk Visualization platform. The system supports three types of data:
 
-### 1. Folder Structure
-```
-/data/
-├── countries/
-│   ├── bhutan/
-│   │   ├── boundaries/
-│   │   │   └── bhutan_adm1.shp (+ .shx, .dbf, .prj files)
-│   │   ├── climate/
-│   │   │   ├── maximum_temp/
-│   │   │   │   ├── historical/
-│   │   │   │   │   ├── annual/
-│   │   │   │   │   │   └── bhutan_max_temp_historical_annual.tif
-│   │   │   │   │   └── seasonal/
-│   │   │   │   │       ├── bhutan_max_temp_historical_12_2.tif (Dec-Feb)
-│   │   │   │   │       ├── bhutan_max_temp_historical_3_5.tif (Mar-May)
-│   │   │   │   │       └── ...
-│   │   │   │   ├── ssp1/
-│   │   │   │   │   ├── 2021-2040/
-│   │   │   │   │   │   ├── annual/
-│   │   │   │   │   │   └── seasonal/
-│   │   │   │   │   └── ...
-│   │   │   │   └── ...
-│   │   │   └── ...
-│   │   ├── giri/
-│   │   │   ├── flood/
-│   │   │   │   ├── existing/
-│   │   │   │   ├── ssp1/
-│   │   │   │   └── ssp5/
-│   │   │   └── drought/
-│   │   │       └── ...
-│   │   └── energy/
-│   │       ├── hydro_power_plants.shp
-│   │       ├── solar_power_plants.shp
-│   │       └── wind_power_plants.shp
-│   ├── mongolia/
-│   │   └── ... (same structure)
-│   └── laos/
-│       └── ... (same structure)
-├── classifications/
-│   ├── climate_classifications.xlsx
-│   ├── giri_classifications.xlsx
-│   └── energy_classifications.xlsx
-└── processed/ (output folder for COG files)
-    └── ... (mirrors input structure but with .cog files)
-```
+1. **Raster Data** (Climate and GIRI variables)
+2. **Vector Point Data** (Energy infrastructure)
+3. **Boundary Data** (Administrative boundaries)
 
-### 2. File Naming Conventions
+## Prerequisites
+
+### Software Requirements
+
+- **GDAL 3.1+** (for raster processing)
+- **Node.js 18+** (if running preprocessing scripts)
+- **Python 3.8+** (optional, for advanced processing)
+
+### File Format Requirements
+
+- **Raster files**: `.tif` or `.cog` format in EPSG:4326 projection
+- **Shapefiles**: Zipped format containing `.shp`, `.shx`, `.dbf`, and `.prj` files
+- **Boundary files**: Zipped shapefiles with administrative boundaries
+- **Icons**: `.png`, `.jpg`, or `.svg` format for point symbols
+
+## Raster Data (Climate & GIRI Variables)
+
+### Supported Variables
 
 #### Climate Variables
-- Pattern: `{country}_{variable}_{scenario}_{period}_{seasonality}.tif`
-- Examples:
-  - `bhutan_max_temp_historical_annual.tif`
-  - `bhutan_precipitation_ssp1_2021-2040_seasonal_3_5.tif`
+- Maximum Temperature
+- Minimum Temperature
+- Mean Temperature
+- Precipitation
+- Solar Radiation
+- Cooling Degree Days
+- Heating Degree Days
 
 #### GIRI Variables
-- Pattern: `{country}_{giri_type}_{scenario}.tif`
-- Examples:
-  - `bhutan_flood_existing.tif`
-  - `mongolia_drought_ssp5.tif`
+- Flood Risk
+- Drought Risk
 
-#### Energy Infrastructure
-- Pattern: `{country}_{energy_type}_plants.shp`
-- Required attribute: `designCapacity` (numeric field for sizing markers)
+### Directory Structure
 
-## Data Preparation Scripts
-
-### 1. TIF to COG Conversion Script
-
-Create this script as `scripts/convert_to_cog.py`:
-
-```python
-#!/usr/bin/env python3
-"""
-Convert TIF raster files to Cloud Optimized GeoTIFF (COG) format
-for faster web loading and display.
-"""
-
-import os
-import subprocess
-import sys
-from pathlib import Path
-
-def convert_tif_to_cog(input_path, output_path, compression='DEFLATE'):
-    """Convert a single TIF file to COG format."""
-    
-    # Ensure output directory exists
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    # GDAL translate command for COG conversion
-    cmd = [
-        'gdal_translate',
-        '-of', 'COG',
-        '-co', f'COMPRESS={compression}',
-        '-co', 'TILED=YES',
-        '-co', 'BLOCKSIZE=512',
-        '-co', 'BIGTIFF=IF_SAFER',
-        '-co', 'OVERVIEW_RESAMPLING=NEAREST',
-        str(input_path),
-        str(output_path)
-    ]
-    
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        print(f"✓ Converted: {input_path.name} -> {output_path.name}")
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"✗ Failed to convert {input_path.name}: {e.stderr}")
-        return False
-
-def batch_convert_directory(input_dir, output_dir):
-    """Convert all TIF files in a directory structure to COG."""
-    
-    input_path = Path(input_dir)
-    output_path = Path(output_dir)
-    
-    if not input_path.exists():
-        print(f"Error: Input directory {input_dir} does not exist")
-        return
-    
-    # Find all TIF files
-    tif_files = list(input_path.rglob('*.tif')) + list(input_path.rglob('*.TIF'))
-    
-    if not tif_files:
-        print("No TIF files found in the input directory")
-        return
-    
-    print(f"Found {len(tif_files)} TIF files to convert...")
-    
-    success_count = 0
-    
-    for tif_file in tif_files:
-        # Calculate relative path and create output path
-        rel_path = tif_file.relative_to(input_path)
-        output_file = output_path / rel_path.with_suffix('.cog')
-        
-        # Skip if output file already exists and is newer
-        if output_file.exists() and output_file.stat().st_mtime > tif_file.stat().st_mtime:
-            print(f"⏭ Skipping {tif_file.name} (already converted)")
-            continue
-        
-        if convert_tif_to_cog(tif_file, output_file):
-            success_count += 1
-    
-    print(f"\nConversion complete: {success_count}/{len(tif_files)} files converted successfully")
-
-if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python convert_to_cog.py <input_directory> <output_directory>")
-        print("Example: python convert_to_cog.py /data/countries /data/processed")
-        sys.exit(1)
-    
-    input_dir = sys.argv[1]
-    output_dir = sys.argv[2]
-    
-    batch_convert_directory(input_dir, output_dir)
+```
+data/
+├── rasters/
+│   ├── bhutan/
+│   │   ├── climate/
+│   │   │   ├── maximum_temperature/
+│   │   │   │   ├── historical/
+│   │   │   │   │   ├── annual/
+│   │   │   │   │   │   └── max_temp_annual.cog
+│   │   │   │   │   └── seasonal/
+│   │   │   │   │       ├── max_temp_12_2.cog  (Dec-Feb)
+│   │   │   │   │       ├── max_temp_3_5.cog   (Mar-May)
+│   │   │   │   │       ├── max_temp_6_8.cog   (Jun-Aug)
+│   │   │   │   │       └── max_temp_9_11.cog  (Sep-Nov)
+│   │   │   │   ├── ssp1/
+│   │   │   │   │   ├── 2021-2040/
+│   │   │   │   │   ├── 2041-2060/
+│   │   │   │   │   ├── 2061-2080/
+│   │   │   │   │   └── 2081-2100/
+│   │   │   │   └── [ssp2, ssp3, ssp5]/
+│   │   │   └── [other climate variables]/
+│   │   └── giri/
+│   │       ├── flood/
+│   │       └── drought/
+│   ├── mongolia/
+│   └── laos/
 ```
 
-### 2. Shapefile Processing Script
+### File Naming Convention
 
-Create this script as `scripts/process_shapefiles.py`:
+For seasonal data, use the pattern: `{variable}_{fromMonth}_{toMonth}.cog`
 
-```python
-#!/usr/bin/env python3
-"""
-Process shapefiles to extract boundaries and prepare for web use.
-"""
+Examples:
+- `max_temp_12_2.cog` (December to February)
+- `precipitation_6_8.cog` (June to August)
 
-import geopandas as gpd
-import json
-from pathlib import Path
-import sys
+### Converting TIF to COG
 
-def process_boundary_shapefile(shapefile_path, output_dir):
-    """Process boundary shapefile to extract bounds and GeoJSON."""
-    
-    try:
-        # Read shapefile
-        gdf = gpd.read_file(shapefile_path)
-        
-        # Ensure it's in WGS84 (EPSG:4326)
-        if gdf.crs != 'EPSG:4326':
-            gdf = gdf.to_crs('EPSG:4326')
-        
-        # Calculate bounds
-        bounds = gdf.total_bounds  # [minx, miny, maxx, maxy]
-        
-        # Calculate center
-        center_x = (bounds[0] + bounds[2]) / 2
-        center_y = (bounds[1] + bounds[3]) / 2
-        
-        # Calculate appropriate zoom level based on bounds
-        lat_diff = bounds[3] - bounds[1]
-        lon_diff = bounds[2] - bounds[0]
-        max_diff = max(lat_diff, lon_diff)
-        
-        # Rough zoom calculation (adjust as needed)
-        if max_diff > 20:
-            zoom = 3
-        elif max_diff > 10:
-            zoom = 4
-        elif max_diff > 5:
-            zoom = 5
-        elif max_diff > 2:
-            zoom = 6
-        elif max_diff > 1:
-            zoom = 7
-        else:
-            zoom = 8
-        
-        # Create output directory
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
-        
-        # Save as GeoJSON for web use
-        country_name = shapefile_path.stem.split('_')[0]
-        geojson_path = output_path / f"{country_name}_boundaries.geojson"
-        gdf.to_file(geojson_path, driver='GeoJSON')
-        
-        # Save bounds and zoom info
-        bounds_info = {
-            "country": country_name,
-            "bounds": bounds.tolist(),
-            "center": [center_x, center_y],
-            "zoom": zoom,
-            "extent": {
-                "minx": bounds[0],
-                "miny": bounds[1], 
-                "maxx": bounds[2],
-                "maxy": bounds[3]
-            }
-        }
-        
-        bounds_path = output_path / f"{country_name}_bounds.json"
-        with open(bounds_path, 'w') as f:
-            json.dump(bounds_info, f, indent=2)
-        
-        print(f"✓ Processed {country_name} boundaries:")
-        print(f"  - Bounds: {bounds}")
-        print(f"  - Center: [{center_x:.6f}, {center_y:.6f}]")
-        print(f"  - Zoom: {zoom}")
-        print(f"  - GeoJSON: {geojson_path}")
-        print(f"  - Bounds info: {bounds_path}")
-        
-        return bounds_info
-        
-    except Exception as e:
-        print(f"✗ Error processing {shapefile_path}: {e}")
-        return None
-
-def process_energy_shapefile(shapefile_path, output_dir):
-    """Process energy infrastructure shapefile."""
-    
-    try:
-        # Read shapefile
-        gdf = gpd.read_file(shapefile_path)
-        
-        # Ensure it's in WGS84 (EPSG:4326)
-        if gdf.crs != 'EPSG:4326':
-            gdf = gdf.to_crs('EPSG:4326')
-        
-        # Check for required designCapacity field
-        if 'designCapacity' not in gdf.columns:
-            print(f"⚠ Warning: 'designCapacity' field not found in {shapefile_path.name}")
-            # Add a default capacity field
-            gdf['designCapacity'] = 1.0
-        
-        # Create output directory
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
-        
-        # Save as GeoJSON
-        filename = shapefile_path.stem
-        geojson_path = output_path / f"{filename}.geojson"
-        gdf.to_file(geojson_path, driver='GeoJSON')
-        
-        # Generate capacity statistics for legend
-        capacity_stats = {
-            "min": float(gdf['designCapacity'].min()),
-            "max": float(gdf['designCapacity'].max()),
-            "mean": float(gdf['designCapacity'].mean()),
-            "count": len(gdf)
-        }
-        
-        stats_path = output_path / f"{filename}_stats.json"
-        with open(stats_path, 'w') as f:
-            json.dump(capacity_stats, f, indent=2)
-        
-        print(f"✓ Processed {filename}:")
-        print(f"  - Points: {len(gdf)}")
-        print(f"  - Capacity range: {capacity_stats['min']:.1f} - {capacity_stats['max']:.1f}")
-        print(f"  - GeoJSON: {geojson_path}")
-        
-        return capacity_stats
-        
-    except Exception as e:
-        print(f"✗ Error processing {shapefile_path}: {e}")
-        return None
-
-if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python process_shapefiles.py <input_directory> <output_directory>")
-        print("Example: python process_shapefiles.py /data/countries /data/processed")
-        sys.exit(1)
-    
-    input_dir = Path(sys.argv[1])
-    output_dir = Path(sys.argv[2])
-    
-    # Process all shapefiles
-    shapefiles = list(input_dir.rglob('*.shp'))
-    
-    for shapefile in shapefiles:
-        if 'boundaries' in str(shapefile) or 'adm1' in shapefile.name:
-            process_boundary_shapefile(shapefile, output_dir / 'boundaries')
-        elif 'energy' in str(shapefile) or any(energy_type in shapefile.name for energy_type in ['hydro', 'solar', 'wind']):
-            process_energy_shapefile(shapefile, output_dir / 'energy')
-```
-
-### 3. Excel Classification Processor
-
-Create this script as `scripts/process_classifications.py`:
-
-```python
-#!/usr/bin/env python3
-"""
-Process Excel classification files to generate color schemes for raster data.
-"""
-
-import pandas as pd
-import json
-import sys
-from pathlib import Path
-
-def process_classification_excel(excel_path, output_dir):
-    """Process Excel file containing classification and color information."""
-    
-    try:
-        # Read Excel file
-        # Expecting columns: 'min_value', 'max_value', 'class_name', 'color_hex'
-        df = pd.read_excel(excel_path)
-        
-        # Validate required columns
-        required_columns = ['min_value', 'max_value', 'class_name', 'color_hex']
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        
-        if missing_columns:
-            print(f"✗ Missing required columns in {excel_path.name}: {missing_columns}")
-            return None
-        
-        # Create classification object
-        classification = {
-            "type": "classified",
-            "classes": []
-        }
-        
-        for _, row in df.iterrows():
-            class_info = {
-                "min": float(row['min_value']),
-                "max": float(row['max_value']),
-                "label": str(row['class_name']),
-                "color": str(row['color_hex']).upper()
-            }
-            
-            # Ensure color has # prefix
-            if not class_info["color"].startswith('#'):
-                class_info["color"] = '#' + class_info["color"]
-            
-            classification["classes"].append(class_info)
-        
-        # Sort classes by min value
-        classification["classes"].sort(key=lambda x: x["min"])
-        
-        # Create output directory
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
-        
-        # Save classification
-        filename = excel_path.stem
-        json_path = output_path / f"{filename}.json"
-        
-        with open(json_path, 'w') as f:
-            json.dump(classification, f, indent=2)
-        
-        print(f"✓ Processed {filename}:")
-        print(f"  - Classes: {len(classification['classes'])}")
-        print(f"  - Range: {classification['classes'][0]['min']} - {classification['classes'][-1]['max']}")
-        print(f"  - Output: {json_path}")
-        
-        return classification
-        
-    except Exception as e:
-        print(f"✗ Error processing {excel_path}: {e}")
-        return None
-
-if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python process_classifications.py <excel_file_or_directory> <output_directory>")
-        sys.exit(1)
-    
-    input_path = Path(sys.argv[1])
-    output_dir = Path(sys.argv[2])
-    
-    if input_path.is_file() and input_path.suffix in ['.xlsx', '.xls']:
-        # Process single file
-        process_classification_excel(input_path, output_dir)
-    elif input_path.is_dir():
-        # Process all Excel files in directory
-        excel_files = list(input_path.glob('*.xlsx')) + list(input_path.glob('*.xls'))
-        
-        for excel_file in excel_files:
-            process_classification_excel(excel_file, output_dir)
-    else:
-        print("Error: Input must be an Excel file or directory containing Excel files")
-```
-
-## Installation Requirements
-
-### Prerequisites
-You'll need to install these tools on your system:
+Use the provided conversion script:
 
 ```bash
-# Install GDAL (for raster processing)
-# On Ubuntu/Debian:
-sudo apt-get update
-sudo apt-get install gdal-bin python3-gdal
+# Make script executable
+chmod +x src/utils/convert-to-cog.sh
 
-# On macOS:
-brew install gdal
+# Convert all TIFFs in a directory
+./src/utils/convert-to-cog.sh -i /path/to/tiffs -o /path/to/cogs
 
-# On Windows:
-# Download from https://www.lfd.uci.edu/~gohlke/pythonlibs/#gdal
-
-# Install Python dependencies
-pip install geopandas pandas openpyxl
+# With custom compression and verbose output
+./src/utils/convert-to-cog.sh -i input/ -o output/ -c LZW -v
 ```
 
-## Usage Instructions
+### Raster Requirements
 
-### Step 1: Prepare Your Data Structure
-1. Create the folder structure as shown above
-2. Place your TIF files in the appropriate country/variable folders
-3. Place boundary shapefiles in the boundaries folders
-4. Place energy shapefiles in the energy folders
-5. Place Excel classification files in the classifications folder
+- **Projection**: EPSG:4326 (WGS84 Geographic)
+- **Format**: GeoTIFF or Cloud Optimized GeoTIFF (COG)
+- **Data Type**: Float32 or Int16
+- **NoData Value**: Properly defined
+- **Spatial Resolution**: Consistent within each variable
 
-### Step 2: Run the Processing Scripts
+### Classification Setup
 
-```bash
-# Make scripts executable
-chmod +x scripts/*.py
+When uploading rasters through the admin panel:
 
-# Convert TIF files to COG
-python scripts/convert_to_cog.py /path/to/data/countries /path/to/data/processed
+1. The system will analyze the file and show min/max/mean values
+2. Configure 5 classification classes:
+   - Adjust min/max values for each class
+   - Select appropriate colors (use ColorBrewer schemes)
+   - Provide descriptive labels
 
-# Process shapefiles
-python scripts/process_shapefiles.py /path/to/data/countries /path/to/data/processed
-
-# Process Excel classifications
-python scripts/process_classifications.py /path/to/data/classifications /path/to/data/processed/classifications
+Example classification for temperature (°C):
+```
+Class 1: -10 to 0   | Color: #313695 | Label: "Very Cold"
+Class 2: 0 to 10    | Color: #74add1 | Label: "Cold"
+Class 3: 10 to 20   | Color: #fee090 | Label: "Moderate"
+Class 4: 20 to 30   | Color: #f46d43 | Label: "Warm"
+Class 5: 30 to 45   | Color: #a50026 | Label: "Very Hot"
 ```
 
-### Step 3: Update Application Configuration
-After processing, update the application's data paths in your configuration files to point to the processed data.
+## Vector Point Data (Energy Infrastructure)
 
-## Excel Classification Format
+### Supported Infrastructure Types
 
-Your Excel files should have these columns:
+- Hydro Power Plants
+- Solar Power Plants
+- Wind Power Plants
 
-| min_value | max_value | class_name | color_hex |
-|-----------|-----------|------------|-----------|
-| 0 | 100 | Very Low | #0d47a1 |
-| 101 | 250 | Low | #1976d2 |
-| 251 | 500 | Medium | #ffa726 |
-| 501 | 750 | High | #f57c00 |
-| 751 | 1000 | Very High | #d32f2f |
+### Shapefile Requirements
 
-## Next Steps
+- **Geometry**: Point features
+- **Projection**: EPSG:4326
+- **Required Attributes**:
+  - Design capacity field (numeric)
+  - Name field (text)
+  - Status field (optional)
 
-1. **Test the Scripts**: Run the scripts on a small subset of your data first
-2. **Verify Output**: Check that COG files load faster than original TIFs
-3. **Update Application**: Integrate the processed data paths into your web application
-4. **Performance Testing**: Test loading times with your actual data
+### Example Attribute Table
+
+| Name | designCapacity | status | type |
+|------|----------------|--------|------|
+| Chukha Hydropower | 336.0 | operational | hydro |
+| Tala Hydropower | 1020.0 | operational | hydro |
+| Solar Farm A | 25.5 | planned | solar |
+
+### Point Sizing
+
+Points will be sized based on the selected design capacity attribute:
+- Values are normalized across the dataset
+- Minimum point size: 8px
+- Maximum point size: 24px
+- Logarithmic scaling for better visualization
+
+### Icon Configuration
+
+Custom icons can be uploaded for each infrastructure type:
+- Upload PNG/SVG files through the admin panel
+- Icons should be 32x32 pixels for optimal display
+- Use transparent backgrounds
+
+## Boundary Data (Administrative Boundaries)
+
+### Administrative Levels
+
+- **ADM0**: Country boundaries
+- **ADM1**: Province/State boundaries (recommended)
+- **ADM2**: District boundaries
+- **ADM3**: Sub-district boundaries
+
+### Shapefile Requirements
+
+- **Geometry**: Polygon features
+- **Projection**: EPSG:4326
+- **Required Attributes**: Name field for hover display
+
+### Recommended Attributes
+
+| Attribute | Description | Example |
+|-----------|-------------|---------|
+| NAME_EN | English name | "Thimphu" |
+| NAME_LOCAL | Local name | "ཐིམ་ཕུ" |
+| ADM1_CODE | Administrative code | "BT.TH" |
+| POPULATION | Population count | 114551 |
+
+### Hover Configuration
+
+Select the attribute that will be displayed when users hover over regions. Common choices:
+- `NAME_EN` (English names)
+- `NAME_LOCAL` (Local language names)
+- `ADM1_NAME` (Administrative names)
+
+## Upload Process
+
+### Step 1: Prepare Data
+
+1. Ensure all files meet format requirements
+2. Convert TIFFs to COG format using the conversion script
+3. Create zipped shapefiles with all required components
+4. Prepare classification schemes (Excel files optional)
+
+### Step 2: Access Admin Panel
+
+1. Navigate to the admin URL
+2. Sign in with owner credentials
+3. Use demo credentials if needed:
+   - Username: `admin`
+   - Password: `escap2024`
+
+### Step 3: Upload Files
+
+#### For Raster Data:
+1. Go to "File Upload" tab
+2. Select "Raster (.tif/.cog)" file type
+3. Choose the appropriate data layer
+4. Select target country
+5. Upload the COG file
+6. Configure classification (5 classes with colors)
+7. Complete upload
+
+#### For Shapefile Data:
+1. Select "Shapefile (.zip)" file type
+2. Choose energy infrastructure layer
+3. Select target country
+4. Upload zipped shapefile
+5. Select design capacity attribute
+6. Choose or upload custom icon
+7. Complete upload
+
+#### For Boundary Data:
+1. Go to "Boundaries" tab
+2. Select country and administrative level
+3. Upload zipped boundary shapefile
+4. Choose hover attribute
+5. Complete upload
+
+### Step 4: Verify Upload
+
+1. Check the file appears in the uploaded files list
+2. Verify classification settings
+3. Test the layer in the main application
+4. Confirm proper zoom and display
+
+## Data Management
+
+### Updating Existing Data
+
+1. Upload new file with same configuration
+2. System will overwrite previous version
+3. Classifications can be reused from previous uploads
+
+### Deleting Data
+
+1. Use the delete button in file management
+2. Confirm deletion in the dialog
+3. Associated classifications are preserved for reuse
+
+### Backup and Export
+
+1. Use "Create Backup" in System Settings
+2. Downloads JSON file with all configurations
+3. Store backups regularly for data safety
 
 ## Troubleshooting
 
-### Common Issues:
-- **GDAL not found**: Install GDAL tools for your operating system
-- **Memory errors**: For very large files, consider processing in smaller batches
-- **Projection issues**: Ensure all data is in EPSG:4326 before processing
-- **Missing attributes**: Check that energy shapefiles have the 'designCapacity' field
+### Common Issues
 
-### Performance Tips:
-- Use SSD storage for faster I/O
-- Process files in parallel for large datasets
-- Monitor disk space (COG files are typically 30-50% smaller than TIFs)
+**Raster not displaying:**
+- Check projection (must be EPSG:4326)
+- Verify file is properly COG formatted
+- Ensure data values are within classification ranges
+
+**Shapefile upload fails:**
+- Verify all required files are in ZIP
+- Check for special characters in filenames
+- Ensure projection file (.prj) is included
+
+**Performance issues:**
+- Use COG format for faster loading
+- Keep file sizes under 100MB when possible
+- Enable caching in system settings
+
+### File Size Optimization
+
+**For Rasters:**
+```bash
+# Compress and optimize
+gdal_translate -of COG -co COMPRESS=DEFLATE \
+  -co OVERVIEW_RESAMPLING=AVERAGE \
+  input.tif output_optimized.cog
+```
+
+**For Shapefiles:**
+- Simplify geometries if too detailed
+- Remove unnecessary attributes
+- Use appropriate data types
+
+## Best Practices
+
+1. **Data Quality**: Ensure consistent projections and data types
+2. **Naming**: Use descriptive, consistent naming conventions
+3. **Documentation**: Maintain metadata for each dataset
+4. **Testing**: Always test uploads in a staging environment
+5. **Backup**: Regular backups of both data and configurations
+
+## Support
+
+For technical issues or questions:
+- Check system logs in admin panel
+- Review upload error messages
+- Contact system administrator for assistance
+
+## Appendix
+
+### Useful GDAL Commands
+
+```bash
+# Check file information
+gdalinfo input.tif
+
+# Reproject to EPSG:4326
+gdalwarp -t_srs EPSG:4326 input.tif output.tif
+
+# Create overviews
+gdaladdo -r average input.tif 2 4 8 16
+
+# Convert to COG with compression
+gdal_translate -of COG -co COMPRESS=LZW input.tif output.cog
+```
+
+### Color Schemes
+
+Recommended color schemes for different data types:
+
+- **Temperature**: Blue to Red (diverging)
+- **Precipitation**: Yellow to Blue (sequential)
+- **Risk/Hazard**: Green to Red (sequential)
+- **Elevation**: Brown to White (sequential)
