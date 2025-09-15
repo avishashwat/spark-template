@@ -94,10 +94,8 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
   }
 
   const handleCategoryChange = (category: string) => {
-    // If clicking the same category, toggle off
-    if (selectedCategory === category) {
-      setSelectedCategory('')
-      setShowSelectionPanel(false)
+    // If clicking the same category that's already selected, just reset
+    if (selectedCategory === category && showSelectionPanel) {
       resetSelections()
     } else {
       setSelectedCategory(category)
@@ -207,24 +205,24 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
               ].map(({ id, label, icon: Icon, color }) => (
                 <button
                   key={id}
-                  className={`flex items-center justify-start w-full h-10 text-sm px-3 border-2 rounded-md transition-all duration-200 hover:bg-primary/10 hover:border-primary/30 ${
-                    selectedCategory === id ? 'bg-primary/10 border-primary text-primary font-medium' : 'bg-white border-border'
+                  className={`flex items-center justify-start w-full h-10 text-sm px-3 border-2 rounded-md transition-all duration-200 hover:bg-primary/5 hover:border-primary/50 ${
+                    selectedCategory === id ? 'bg-primary/15 border-primary text-primary font-medium' : 'bg-white border-border text-foreground'
                   }`}
                   onClick={() => handleCategoryChange(id)}
                 >
                   <Icon className={`w-4 h-4 mr-2 ${selectedCategory === id ? 'text-primary' : color}`} />
                   {label}
-                  {selectedCategory === id ? (
-                    <X className="w-4 h-4 ml-auto text-primary" />
-                  ) : (
-                    <Plus className="w-4 h-4 ml-auto text-muted-foreground" />
+                  {selectedCategory === id && (
+                    <Badge variant="secondary" className="ml-auto text-xs">
+                      Active
+                    </Badge>
                   )}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Selection Panel - Simplified visibility logic */}
+          {/* Selection Panel - Show when category is selected */}
           {selectedCategory && (
             <div className="space-y-3 border-2 rounded-lg p-4 bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/40 shadow-md relative z-10 animate-in slide-in-from-top-2 duration-200">
               <div className="flex items-center justify-between">
@@ -248,14 +246,12 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
                     </>
                   )}
                 </h4>
-                <button 
+                <button
                   className="text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted transition-colors"
                   onClick={() => {
-                    setSelectedCategory('')
-                    setShowSelectionPanel(false)
                     resetSelections()
                   }}
-                  title="Close selection panel"
+                  title="Clear selections"
                 >
                   <X className="w-4 h-4" />
                 </button>
