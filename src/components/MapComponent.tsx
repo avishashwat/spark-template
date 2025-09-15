@@ -554,16 +554,33 @@ export function MapComponent({
             <div className="flex-1 relative">
               <div ref={mapRef} className="w-full h-full cursor-pointer" />
               
-              {/* Legends - positioned in top-left corner, support multiple overlays */}
+              {/* Legends - positioned in top-left corner, support multiple overlays with scaled sizing */}
               {allMapOverlays && allMapOverlays[id] && Object.keys(allMapOverlays[id]).length > 0 && (
                 <div className="absolute top-2 left-2 space-y-2 z-10">
                   {Object.entries(allMapOverlays[id]).map(([category, overlay]: [string, any]) => (
-                    <div key={category} className="bg-white/95 border border-border rounded p-2 shadow-sm max-w-[180px] map-legend">
-                      <div className="text-xs font-medium text-foreground mb-2">{overlay.name}</div>
+                    <div 
+                      key={category} 
+                      className={`bg-white/95 border border-border rounded shadow-sm map-legend ${
+                        mapLayout === 1 
+                          ? 'p-2 max-w-[180px]' 
+                          : mapLayout === 2 
+                            ? 'p-1.5 max-w-[140px]' 
+                            : 'p-1 max-w-[100px]'
+                      }`}
+                    >
+                      <div className={`font-medium text-foreground mb-1 ${
+                        mapLayout === 1 
+                          ? 'text-xs' 
+                          : mapLayout === 2 
+                            ? 'text-[10px]' 
+                            : 'text-[9px]'
+                      }`}>
+                        {overlay.name}
+                      </div>
                       {overlay.type === 'Energy' ? (
-                        <EnergyLegend energyType={overlay.name} />
+                        <EnergyLegend energyType={overlay.name} mapLayout={mapLayout} />
                       ) : (
-                        <RasterLegend overlayInfo={overlay} />
+                        <RasterLegend overlayInfo={overlay} mapLayout={mapLayout} />
                       )}
                     </div>
                   ))}

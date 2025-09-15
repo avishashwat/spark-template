@@ -2,6 +2,7 @@ import React from 'react'
 
 interface EnergyLegendProps {
   energyType: string
+  mapLayout?: number
 }
 
 const getEnergyLegendInfo = (energyType: string) => {
@@ -26,25 +27,62 @@ const getEnergyLegendInfo = (energyType: string) => {
   return baseInfo[energyType as keyof typeof baseInfo] || baseInfo['Hydro Power Plants']
 }
 
-export function EnergyLegend({ energyType }: EnergyLegendProps) {
+export function EnergyLegend({ energyType, mapLayout = 1 }: EnergyLegendProps) {
   const legendInfo = getEnergyLegendInfo(energyType)
   
-  // Define size categories for designCapacity
-  const sizeCategories = [
-    { range: '< 10 MW', size: 4, description: 'Small' },
-    { range: '10-50 MW', size: 6, description: 'Medium' },
-    { range: '50-200 MW', size: 8, description: 'Large' },
-    { range: '> 200 MW', size: 10, description: 'Very Large' }
-  ]
+  // Define size categories for designCapacity with scaling
+  const getSizeCategories = () => {
+    const baseSizes = [4, 6, 8, 10]
+    const scale = mapLayout === 1 ? 1 : mapLayout === 2 ? 0.8 : 0.6
+    
+    return [
+      { range: '< 10 MW', size: baseSizes[0] * scale, description: 'Small' },
+      { range: '10-50 MW', size: baseSizes[1] * scale, description: 'Medium' },
+      { range: '50-200 MW', size: baseSizes[2] * scale, description: 'Large' },
+      { range: '> 200 MW', size: baseSizes[3] * scale, description: 'Very Large' }
+    ]
+  }
+  
+  // Scale text and spacing based on map layout
+  const getScaledClasses = () => {
+    if (mapLayout === 1) {
+      return {
+        container: 'space-y-2',
+        innerContainer: 'space-y-1',
+        titleText: 'text-xs',
+        itemText: 'text-xs',
+        gap: 'gap-2'
+      }
+    } else if (mapLayout === 2) {
+      return {
+        container: 'space-y-1.5',
+        innerContainer: 'space-y-0.5',
+        titleText: 'text-[10px]',
+        itemText: 'text-[10px]',
+        gap: 'gap-1.5'
+      }
+    } else {
+      return {
+        container: 'space-y-1',
+        innerContainer: 'space-y-0.5',
+        titleText: 'text-[9px]',
+        itemText: 'text-[9px]',
+        gap: 'gap-1'
+      }
+    }
+  }
+  
+  const sizeCategories = getSizeCategories()
+  const classes = getScaledClasses()
 
   return (
-    <div className="space-y-2">
-      <div className="space-y-1">
-        <div className="text-xs font-medium text-gray-600">
+    <div className={classes.container}>
+      <div className={classes.innerContainer}>
+        <div className={`${classes.titleText} font-medium text-gray-600`}>
           Size by Design Capacity:
         </div>
         {sizeCategories.map((category, index) => (
-          <div key={index} className="flex items-center gap-2 text-xs">
+          <div key={index} className={`flex items-center ${classes.gap} ${classes.itemText}`}>
             <div 
               className="rounded-full flex-shrink-0"
               style={{ 
@@ -54,7 +92,7 @@ export function EnergyLegend({ energyType }: EnergyLegendProps) {
                 opacity: 0.8
               }}
             />
-            <span className="text-gray-700 text-xs">
+            <span className={`text-gray-700 ${classes.itemText}`}>
               {category.range}
             </span>
           </div>

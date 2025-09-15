@@ -8,6 +8,7 @@ interface RasterLegendProps {
     year?: string
     season?: string
   }
+  mapLayout?: number
 }
 
 // Define color schemes for different data types
@@ -103,19 +104,44 @@ const getDataRanges = (dataType: string) => {
   return ['0-100', '101-250', '251-500', '501-750', '751-1000']
 }
 
-export function RasterLegend({ overlayInfo }: RasterLegendProps) {
+export function RasterLegend({ overlayInfo, mapLayout = 1 }: RasterLegendProps) {
   const colorScheme = getColorScheme(overlayInfo.name)
   const dataRanges = getDataRanges(overlayInfo.name)
   
+  // Scale sizing based on map layout
+  const getScaledClasses = () => {
+    if (mapLayout === 1) {
+      return {
+        container: 'space-y-1',
+        colorBox: 'w-3 h-3',
+        text: 'text-xs'
+      }
+    } else if (mapLayout === 2) {
+      return {
+        container: 'space-y-0.5',
+        colorBox: 'w-2.5 h-2.5',
+        text: 'text-[10px]'
+      }
+    } else {
+      return {
+        container: 'space-y-0.5',
+        colorBox: 'w-2 h-2',
+        text: 'text-[9px]'
+      }
+    }
+  }
+  
+  const classes = getScaledClasses()
+  
   return (
-    <div className="space-y-1">
+    <div className={classes.container}>
       {colorScheme.map((item, index) => (
-        <div key={index} className="flex items-center gap-2">
+        <div key={index} className="flex items-center gap-1.5">
           <div 
-            className="w-3 h-3 rounded-sm border border-gray-300" 
+            className={`${classes.colorBox} rounded-sm border border-gray-300`}
             style={{ backgroundColor: item.color }}
           />
-          <span className="text-xs text-foreground">
+          <span className={`${classes.text} text-foreground`}>
             {dataRanges[index] || item.label}
           </span>
         </div>
