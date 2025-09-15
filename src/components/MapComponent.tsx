@@ -324,8 +324,15 @@ export function MapComponent({
           })
         })
         
+        // Set layer type for identification
+        boundaryLayer.set('layerType', 'boundary')
+        
         console.log('Created boundary layer')
         
+        // Add the boundary layer to the map
+        map.addLayer(boundaryLayer)
+        
+        console.log('Added boundary layer to map')
         
         // Add hover interaction for boundary features
         const hoverAttribute = countryBoundary.hoverAttribute

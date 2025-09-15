@@ -80,21 +80,39 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
         try {
           const arrayBuffer = e.target?.result as ArrayBuffer
           
+          // Import libraries dynamically
+          const [JSZip, shpjs] = await Promise.all([
+            import('jszip'),
+            import('shpjs')
+          ])
+          
+          console.log('Libraries loaded successfully')
+          
           // Use JSZip to extract the zip file
-          const JSZip = await import('jszip').then(m => m.default)
-          const zip = new JSZip()
+          const zip = new JSZip.default()
           const contents = await zip.loadAsync(arrayBuffer)
           
+          console.log('Zip file loaded, contents:', Object.keys(contents.files))
+          
           // Find .shp, .dbf, .shx files
-          let shpFile, dbfFile, shxFile
+          let shpFile, dbfFile, shxFile, prjFile
           
           for (const [filename, zipFile] of Object.entries(contents.files)) {
-            if (filename.endsWith('.shp')) {
+            if (zipFile.dir) continue // Skip directories
+            
+            const lowerFilename = filename.toLowerCase()
+            if (lowerFilename.endsWith('.shp')) {
               shpFile = await zipFile.async('arraybuffer')
-            } else if (filename.endsWith('.dbf')) {
+              console.log('Found .shp file:', filename)
+            } else if (lowerFilename.endsWith('.dbf')) {
               dbfFile = await zipFile.async('arraybuffer')
-            } else if (filename.endsWith('.shx')) {
+              console.log('Found .dbf file:', filename)
+            } else if (lowerFilename.endsWith('.shx')) {
               shxFile = await zipFile.async('arraybuffer')
+              console.log('Found .shx file:', filename)
+            } else if (lowerFilename.endsWith('.prj')) {
+              prjFile = await zipFile.async('text')
+              console.log('Found .prj file:', filename)
             }
           }
           
@@ -102,14 +120,10 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
             throw new Error('Invalid shapefile: missing .shp or .dbf files')
           }
           
-          // Use shpjs library to parse shapefile
-          const shpjs = await import('shpjs').then(m => m.default)
+          console.log('All required files found, parsing shapefile...')
           
-          // Parse shapefile to GeoJSON
-          const geojson = await shpjs.combine([
-            shpjs.parseShp(shpFile),
-            shpjs.parseDbf(dbfFile)
-          ])
+          // Parse shapefile to GeoJSON using shpjs
+          const geojson = await shpjs.default(arrayBuffer)
           
           console.log('Parsed GeoJSON:', geojson)
           
@@ -136,10 +150,12 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
                   coordArray.forEach(processCoords)
                 } else {
                   const [x, y] = coordArray
-                  minX = Math.min(minX, x)
-                  maxX = Math.max(maxX, x)
-                  minY = Math.min(minY, y)
-                  maxY = Math.max(maxY, y)
+                  if (typeof x === 'number' && typeof y === 'number') {
+                    minX = Math.min(minX, x)
+                    maxX = Math.max(maxX, x)
+                    minY = Math.min(minY, y)
+                    maxY = Math.max(maxY, y)
+                  }
                 }
               }
               
@@ -147,15 +163,30 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
                 coords.forEach(processCoords)
               } else if (feature.geometry.type === 'MultiPolygon') {
                 coords.forEach((polygon: any) => polygon.forEach(processCoords))
+              } else if (feature.geometry.type === 'Point') {
+                const [x, y] = coords
+                if (typeof x === 'number' && typeof y === 'number') {
+                  minX = Math.min(minX, x)
+                  maxX = Math.max(maxX, x)
+                  minY = Math.min(minY, y)
+                  maxY = Math.max(maxY, y)
+                }
               }
             }
           })
           
+          // Ensure valid bounds
+          if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) {
+            throw new Error('Could not calculate valid bounds from shapefile')
+          }
+          
           const metadata = {
             featureCount: geojson.features.length,
             bounds: [minX, minY, maxX, maxY] as [number, number, number, number],
-            projection: 'EPSG:4326'
+            projection: prjFile ? 'EPSG:4326' : 'EPSG:4326' // Default to WGS84
           }
+          
+          console.log('Analysis complete:', { attributes, metadata })
           
           resolve({ 
             attributes, 
@@ -165,7 +196,7 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
           
         } catch (error) {
           console.error('Error analyzing shapefile:', error)
-          reject(error)
+          reject(new Error(`Failed to analyze shapefile: ${error.message}`))
         }
       }
       
@@ -188,13 +219,19 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
       return
     }
 
+    console.log('Starting file analysis for:', file.name, 'Size:', file.size)
+
     setCurrentFile(file)
     setIsUploading(true)
     setUploadProgress(10)
 
     try {
+      console.log('Beginning shapefile analysis...')
       setUploadProgress(30)
+      
       const analysis = await analyzeShapefileForBoundary(file)
+      
+      console.log('Analysis successful:', analysis)
       setShapefileAttributes(analysis.attributes)
       setFileMetadata(analysis.metadata)
       setCurrentGeojsonData(analysis.geojsonData)
@@ -212,18 +249,22 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
         attr.toLowerCase().includes('name') || 
         attr.toLowerCase().includes('province') ||
         attr.toLowerCase().includes('district') ||
-        attr.toLowerCase().includes('state')
+        attr.toLowerCase().includes('state') ||
+        attr.toLowerCase().includes('admin') ||
+        attr.toLowerCase().includes('region')
       )
       if (nameAttribute) {
         setHoverAttribute(nameAttribute)
       }
       
-      toast.success('Shapefile analyzed successfully')
+      toast.success(`Shapefile analyzed successfully! Found ${analysis.metadata.featureCount} features with ${analysis.attributes.length} attributes.`)
     } catch (error) {
       console.error('Shapefile analysis error:', error)
-      toast.error('Failed to analyze shapefile')
+      toast.error(`Failed to analyze shapefile: ${error.message || 'Unknown error'}`)
       setIsUploading(false)
       setUploadProgress(0)
+      setShowConfiguration(false)
+      setCurrentFile(null)
     }
   }
 
