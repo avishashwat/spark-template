@@ -264,9 +264,12 @@ export function MapComponent({
       try {
         // Get boundary files from storage
         const boundaryFiles = await window.spark.kv.get<any[]>('admin_boundary_files') || []
+        console.log('All boundary files:', boundaryFiles)
+        console.log('Looking for country:', country)
         
         // Find boundary file for current country
         const countryBoundary = boundaryFiles.find(file => file.country === country)
+        console.log('Found boundary for country:', countryBoundary)
         
         if (!countryBoundary || !countryBoundary.geojsonData) {
           console.log(`No boundary file found for country: ${country}`)
@@ -291,13 +294,22 @@ export function MapComponent({
         
         // Use the actual GeoJSON data from the uploaded shapefile
         const geojsonData = countryBoundary.geojsonData
+        console.log('GeoJSON data for boundary:', geojsonData)
+        
+        if (!geojsonData || !geojsonData.features || geojsonData.features.length === 0) {
+          console.error('Invalid GeoJSON data:', geojsonData)
+          return
+        }
         
         // Create vector source and layer
         const boundarySource = new VectorSource({
           features: new GeoJSON().readFeatures(geojsonData, {
-            featureProjection: 'EPSG:4326'
+            featureProjection: 'EPSG:4326',
+            dataProjection: 'EPSG:4326'
           })
         })
+        
+        console.log('Created boundary source with features:', boundarySource.getFeatures().length)
         
         const boundaryLayer = new VectorLayer({
           source: boundarySource,
@@ -312,78 +324,8 @@ export function MapComponent({
           })
         })
         
-        // Create an inverse mask layer to grey out areas outside the boundary
-        // First, get the union of all features to create the hole
-        const allFeatures = boundarySource.getFeatures()
-        if (allFeatures.length > 0) {
-          // Get the bounding box of all features for the mask
-          const extent = boundarySource.getExtent()
-          const [minX, minY, maxX, maxY] = extent
-          
-          // Expand the world bounds to ensure full coverage
-          const worldBounds = [-180, -85, 180, 85]
-          
-          // Create a simple mask using the bounds (for performance)
-          // In a production environment, you might want to create a proper polygon union
-          const maskGeoJSON = {
-            type: 'FeatureCollection',
-            features: [
-              {
-                type: 'Feature',
-                properties: {},
-                geometry: {
-                  type: 'Polygon',
-                  coordinates: [
-                    [
-                      [worldBounds[0], worldBounds[1]], // SW
-                      [worldBounds[2], worldBounds[1]], // SE
-                      [worldBounds[2], worldBounds[3]], // NE
-                      [worldBounds[0], worldBounds[3]], // NW
-                      [worldBounds[0], worldBounds[1]]  // Close
-                    ],
-                    // Hole (approximate country boundary using extent)
-                    [
-                      [minX - 0.1, minY - 0.1],
-                      [maxX + 0.1, minY - 0.1],
-                      [maxX + 0.1, maxY + 0.1],
-                      [minX - 0.1, maxY + 0.1],
-                      [minX - 0.1, minY - 0.1]
-                    ].reverse() // Reverse for hole
-                  ]
-                }
-              }
-            ]
-          }
-          
-          const maskSource = new VectorSource({
-            features: new GeoJSON().readFeatures(maskGeoJSON, {
-              featureProjection: 'EPSG:4326'
-            })
-          })
-          
-          const maskLayer = new VectorLayer({
-            source: maskSource,
-            style: new Style({
-              fill: new Fill({
-                color: 'rgba(128, 128, 128, 0.3)' // Semi-transparent grey overlay
-              })
-            })
-          })
-          
-          // Set layer properties for identification
-          maskLayer.set('layerType', 'countryMask')
-          maskLayer.set('countryCode', country)
-          
-          // Add mask layer first (below boundary)
-          layers.insertAt(layers.getLength(), maskLayer)
-        }
+        console.log('Created boundary layer')
         
-        // Set layer properties for identification
-        boundaryLayer.set('layerType', 'boundary')
-        boundaryLayer.set('countryCode', country)
-        
-        // Add boundary layer on top
-        layers.insertAt(layers.getLength(), boundaryLayer)
         
         // Add hover interaction for boundary features
         const hoverAttribute = countryBoundary.hoverAttribute
@@ -450,6 +392,12 @@ export function MapComponent({
         
       } catch (error) {
         console.error('Failed to load boundary layer:', error)
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+          country: country
+        })
+        toast.error(`Failed to load boundary for ${country}: ${error.message}`)
       }
     }
     

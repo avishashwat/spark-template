@@ -111,6 +111,8 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
             shpjs.parseDbf(dbfFile)
           ])
           
+          console.log('Parsed GeoJSON:', geojson)
+          
           if (!geojson || !geojson.features || geojson.features.length === 0) {
             throw new Error('No features found in shapefile')
           }
@@ -118,6 +120,9 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
           // Extract attributes from first feature
           const firstFeature = geojson.features[0]
           const attributes = Object.keys(firstFeature.properties || {})
+          
+          console.log('First feature:', firstFeature)
+          console.log('Attributes found:', attributes)
           
           // Calculate bounds
           let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
@@ -193,8 +198,14 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
       setShapefileAttributes(analysis.attributes)
       setFileMetadata(analysis.metadata)
       setCurrentGeojsonData(analysis.geojsonData)
-      setUploadProgress(70)
+      setUploadProgress(100) // Complete the analysis phase
       setShowConfiguration(true)
+      
+      // Reset upload state after showing configuration
+      setTimeout(() => {
+        setIsUploading(false)
+        setUploadProgress(0)
+      }, 500)
       
       // Auto-select likely name attribute
       const nameAttribute = analysis.attributes.find(attr => 
@@ -241,6 +252,9 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
 
       const updatedFiles = [...boundaryFiles, boundaryFile]
       await window.spark.kv.set('admin_boundary_files', updatedFiles)
+      
+      console.log('Saved boundary file:', boundaryFile)
+      console.log('Total boundary files now:', updatedFiles.length)
       
       setBoundaryFiles(updatedFiles)
       setUploadProgress(100)
@@ -389,7 +403,9 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
                 disabled={isUploading || !selectedCountry}
                 className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
               />
-              {isUploading && <Progress value={uploadProgress} className="w-32" />}
+              {isUploading && uploadProgress > 0 && uploadProgress < 100 && (
+                <Progress value={uploadProgress} className="w-32" />
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
               Upload a zipped shapefile containing .shp, .shx, .dbf, and .prj files
@@ -469,7 +485,7 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
               <Button variant="outline" onClick={() => setShowConfiguration(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleUploadComplete} disabled={isUploading || !hoverAttribute}>
+              <Button onClick={handleUploadComplete} disabled={!hoverAttribute}>
                 <UploadSimple size={16} className="mr-2" />
                 Complete Upload
               </Button>
