@@ -101,28 +101,58 @@ function App() {
     setSharedView({ center, zoom })
   }, [])
 
-  const handleLayerChange = useCallback((mapId: string, layer: any) => {
+  const handleLayerChange = useCallback((mapId: string, layer: any, action: 'add' | 'remove' = 'add') => {
     // Handle layer changes for specific map
-    console.log('Layer change for map:', mapId, layer)
+    console.log('Layer change for map:', mapId, layer, action)
     
-    // Update overlay info for the specific map
-    if (layer) {
-      setMapOverlays(prev => ({
-        ...prev,
-        [mapId]: {
-          type: layer.type || 'Unknown',
-          name: layer.name || 'Unknown Layer',
-          scenario: layer.scenario,
-          year: layer.year,
-          season: layer.season
-        }
-      }))
-    } else {
-      // Remove overlay when layer is cleared
+    if (action === 'add' && layer) {
+      // Update overlay info for the specific map - supporting multiple overlays
       setMapOverlays(prev => {
-        const updated = { ...prev }
-        delete updated[mapId]
-        return updated
+        const currentOverlays = prev[mapId] || {}
+        
+        // Store overlays by category
+        const updatedOverlays = {
+          ...currentOverlays,
+          [layer.type.toLowerCase()]: {
+            type: layer.type || 'Unknown',
+            name: layer.name || 'Unknown Layer',
+            scenario: layer.scenario,
+            year: layer.year,
+            season: layer.season
+          }
+        }
+        
+        return {
+          ...prev,
+          [mapId]: updatedOverlays
+        }
+      })
+    } else if (action === 'remove') {
+      // Remove specific overlay category or all overlays
+      setMapOverlays(prev => {
+        if (!layer) {
+          // Remove all overlays for this map
+          const updated = { ...prev }
+          delete updated[mapId]
+          return updated
+        } else {
+          // Remove specific category overlay
+          const currentOverlays = prev[mapId] || {}
+          const updatedOverlays = { ...currentOverlays }
+          delete updatedOverlays[layer.type.toLowerCase()]
+          
+          if (Object.keys(updatedOverlays).length === 0) {
+            // If no overlays left, remove the map entry
+            const updated = { ...prev }
+            delete updated[mapId]
+            return updated
+          } else {
+            return {
+              ...prev,
+              [mapId]: updatedOverlays
+            }
+          }
+        }
       })
     }
   }, [])
@@ -149,6 +179,7 @@ function App() {
             country={selectedCountry}
             basemap={basemap}
             overlayInfo={mapOverlays[mapId]}
+            allMapOverlays={mapOverlays}
             mapLayout={mapLayout}
           />
         </div>
@@ -194,6 +225,7 @@ function App() {
               activeMapId={activeMapId}
               onLayerChange={handleLayerChange}
               mapLayout={mapLayout} // Pass layout to clear layers on change
+              selectedCountry={selectedCountry} // Pass country to clear layers on change
             />
           </div>
         )}

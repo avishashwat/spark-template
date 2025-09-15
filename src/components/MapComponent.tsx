@@ -26,6 +26,7 @@ interface MapComponentProps {
     year?: string
     season?: string
   }
+  allMapOverlays?: Record<string, any> // Add access to all map overlays
   mapLayout: number // Added to know if we're in multi-map mode
 }
 
@@ -74,6 +75,7 @@ export function MapComponent({
   country,
   basemap = 'osm',
   overlayInfo,
+  allMapOverlays,
   mapLayout
 }: MapComponentProps) {
   const mapRef = useRef<HTMLDivElement>(null)
@@ -441,14 +443,24 @@ export function MapComponent({
 
 
   const getOverlayDisplayText = () => {
-    if (!overlayInfo) return 'No overlay selected'
+    if (!allMapOverlays || !allMapOverlays[id] || Object.keys(allMapOverlays[id]).length === 0) {
+      return 'No overlay selected'
+    }
     
-    let text = overlayInfo.name
-    if (overlayInfo.scenario) text += ` (${overlayInfo.scenario})`
-    if (overlayInfo.year) text += ` ${overlayInfo.year}`
-    if (overlayInfo.season) text += ` - ${overlayInfo.season}`
+    const overlays = Object.values(allMapOverlays[id]) as any[]
     
-    return text
+    if (overlays.length === 1) {
+      const overlay = overlays[0]
+      let text = overlay.name
+      if (overlay.scenario) text += ` (${overlay.scenario})`
+      if (overlay.year) text += ` ${overlay.year}`
+      if (overlay.season) text += ` - ${overlay.season}`
+      return text
+    } else {
+      // Multiple overlays - show count and types
+      const types = overlays.map(overlay => overlay.type).join(', ')
+      return `${overlays.length} layers: ${types}`
+    }
   }
 
   const viewModeOptions = [
@@ -542,15 +554,19 @@ export function MapComponent({
             <div className="flex-1 relative">
               <div ref={mapRef} className="w-full h-full cursor-pointer" />
               
-              {/* Legend - positioned in top-left corner */}
-              {overlayInfo && (
-                <div className="absolute top-2 left-2 bg-white/95 border border-border rounded p-2 shadow-sm max-w-[180px] z-10 map-legend">
-                  <div className="text-xs font-medium text-foreground mb-2">{overlayInfo.name}</div>
-                  {overlayInfo.type === 'Energy' ? (
-                    <EnergyLegend energyType={overlayInfo.name} />
-                  ) : (
-                    <RasterLegend overlayInfo={overlayInfo} />
-                  )}
+              {/* Legends - positioned in top-left corner, support multiple overlays */}
+              {allMapOverlays && allMapOverlays[id] && Object.keys(allMapOverlays[id]).length > 0 && (
+                <div className="absolute top-2 left-2 space-y-2 z-10">
+                  {Object.entries(allMapOverlays[id]).map(([category, overlay]: [string, any]) => (
+                    <div key={category} className="bg-white/95 border border-border rounded p-2 shadow-sm max-w-[180px] map-legend">
+                      <div className="text-xs font-medium text-foreground mb-2">{overlay.name}</div>
+                      {overlay.type === 'Energy' ? (
+                        <EnergyLegend energyType={overlay.name} />
+                      ) : (
+                        <RasterLegend overlayInfo={overlay} />
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
               
@@ -599,8 +615,8 @@ export function MapComponent({
               </div>
             </div>
             
-            {/* Source and Disclaimer - only show in single map view when overlay is selected */}
-            {overlayInfo && mapLayout === 1 && (
+            {/* Source and Disclaimer - only show in single map view when any overlay is selected */}
+            {allMapOverlays && allMapOverlays[id] && Object.keys(allMapOverlays[id]).length > 0 && mapLayout === 1 && (
               <div className="bg-muted/50 border-t border-border px-3 py-2">
                 <div className="text-xs text-muted-foreground space-y-1 map-disclaimer">
                   <div>
@@ -616,11 +632,17 @@ export function MapComponent({
         )}
         
         {viewMode === 'chart' && (
-          <ChartView overlayInfo={overlayInfo} country={country} />
+          <ChartView 
+            overlayInfo={allMapOverlays && allMapOverlays[id] ? Object.values(allMapOverlays[id])[0] as any : undefined} 
+            country={country} 
+          />
         )}
         
         {viewMode === 'table' && (
-          <TableView overlayInfo={overlayInfo} country={country} />
+          <TableView 
+            overlayInfo={allMapOverlays && allMapOverlays[id] ? Object.values(allMapOverlays[id])[0] as any : undefined} 
+            country={country} 
+          />
         )}
       </div>
     </div>

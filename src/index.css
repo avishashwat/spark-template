@@ -192,6 +192,8 @@
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   z-index: 10;
+  max-height: 300px; /* Limit height for multiple legends */
+  overflow-y: auto; /* Allow scrolling if many legends */
 }
 
 /* Source and disclaimer text styling */

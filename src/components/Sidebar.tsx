@@ -62,7 +62,12 @@ const energyInfrastructure = [
   'Wind Power Plants'
 ]
 
-export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId: string, onLayerChange: (mapId: string, layer: LayerConfig | null) => void, mapLayout: number }) {
+export function Sidebar({ activeMapId, onLayerChange, mapLayout, selectedCountry }: { 
+  activeMapId: string, 
+  onLayerChange: (mapId: string, layer: LayerConfig | null, action?: 'add' | 'remove') => void, 
+  mapLayout: number,
+  selectedCountry: string 
+}) {
   const [selectedCategory, setSelectedCategory] = useState<string>('')
   const [showSelectionPanel, setShowSelectionPanel] = useState(false)
   const [climateVariable, setClimateVariable] = useState<string>('')
@@ -80,6 +85,14 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
     setActiveLayers([])
     resetSelections()
   }, [mapLayout])
+
+  // Clear layers when country changes
+  useEffect(() => {
+    setActiveLayers([])
+    resetSelections()
+    setShowSelectionPanel(false)
+    setSelectedCategory('')
+  }, [selectedCountry])
 
   // Track active layers by category for current map
   const getActiveLayersByCategory = () => {
@@ -181,7 +194,7 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
       }
       
       setActiveLayers(prev => [...prev.filter(layer => !layersToRemove.includes(layer.id)), newLayer])
-      onLayerChange(activeMapId, layerInfo)
+      onLayerChange(activeMapId, layerInfo, 'add')
       
       // Keep selection panel open and reset selections for easy re-use
       resetSelections()
@@ -209,8 +222,16 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
   }
 
   const removeLayer = (layerId: string) => {
+    const layer = activeLayers.find(l => l.id === layerId)
     setActiveLayers(prev => prev.filter(layer => layer.id !== layerId))
-    onLayerChange(activeMapId, null) // Clear overlay
+    
+    if (layer) {
+      // Remove specific layer category
+      onLayerChange(activeMapId, {
+        name: layer.name,
+        type: layer.category.charAt(0).toUpperCase() + layer.category.slice(1)
+      } as any, 'remove')
+    }
   }
 
   const canAddLayer = () => {
