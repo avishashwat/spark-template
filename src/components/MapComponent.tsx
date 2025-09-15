@@ -521,27 +521,61 @@ export function MapComponent({
         let maskGeometry = worldGeometry
         
         if (boundaryFeatures.length > 0) {
-          // Create a polygon with holes where the boundary features are
-          const holes: number[][][] = []
+          // For Mongolia and other countries with complex internal boundaries,
+          // we need to create a union of all features to get the outer boundary only
+          // This prevents interior provinces from being masked
           
-          boundaryFeatures.forEach(feature => {
-            const geom = feature.getGeometry()
-            if (geom?.getType() === 'Polygon') {
-              const coords = (geom as any).getCoordinates()
-              holes.push(coords[0]) // Add the exterior ring as a hole
-            } else if (geom?.getType() === 'MultiPolygon') {
-              const coords = (geom as any).getCoordinates()
-              coords.forEach((polygon: number[][][]) => {
-                holes.push(polygon[0]) // Add each exterior ring as a hole
+          try {
+            // Get all coordinates from all features
+            const allCoordinates: number[][][] = []
+            
+            boundaryFeatures.forEach(feature => {
+              const geom = feature.getGeometry()
+              if (geom?.getType() === 'Polygon') {
+                const coords = (geom as any).getCoordinates()
+                allCoordinates.push(...coords)
+              } else if (geom?.getType() === 'MultiPolygon') {
+                const coords = (geom as any).getCoordinates()
+                coords.forEach((polygon: number[][][]) => {
+                  allCoordinates.push(...polygon)
+                })
+              }
+            })
+            
+            // Find the overall bounding box of all features to create a single outline
+            let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity
+            
+            allCoordinates.forEach(ring => {
+              ring.forEach(coord => {
+                minLon = Math.min(minLon, coord[0])
+                maxLon = Math.max(maxLon, coord[0])
+                minLat = Math.min(minLat, coord[1])
+                maxLat = Math.max(maxLat, coord[1])
               })
+            })
+            
+            // Create a convex hull-like approach by using the extent
+            // This creates a single hole that encompasses the entire country
+            if (isFinite(minLon) && isFinite(minLat) && isFinite(maxLon) && isFinite(maxLat)) {
+              // Add some padding to ensure all features are covered
+              const padding = 0.1
+              const countryHole = [
+                [minLon - padding, minLat - padding],
+                [maxLon + padding, minLat - padding],
+                [maxLon + padding, maxLat + padding],
+                [minLon - padding, maxLat + padding],
+                [minLon - padding, minLat - padding]
+              ]
+              
+              maskGeometry = {
+                type: "Polygon",
+                coordinates: [worldGeometry.coordinates[0], countryHole]
+              }
             }
-          })
-          
-          if (holes.length > 0) {
-            maskGeometry = {
-              type: "Polygon",
-              coordinates: [worldGeometry.coordinates[0], ...holes]
-            }
+          } catch (error) {
+            console.error('Error creating unified mask geometry:', error)
+            // Fallback to original world geometry
+            maskGeometry = worldGeometry
           }
         }
         
