@@ -90,7 +90,7 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
     setGiriVariable('')
     setGiriScenario('')
     setEnergyType('')
-    setShowSelectionPanel(false)
+    // Don't hide the panel, just reset the form values
   }
 
   const handleCategoryChange = (category: string) => {
@@ -142,9 +142,7 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
       setActiveLayers([...activeLayers, newLayer])
       onLayerChange(activeMapId, layerInfo)
       
-      // Hide selection panel after adding layer
-      setShowSelectionPanel(false)
-      setSelectedCategory('')
+      // Keep the selection panel open but reset selections for easy re-use
       resetSelections()
     }
   }
@@ -226,9 +224,9 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
             </div>
           </div>
 
-          {/* Selection Panel */}
-          {selectedCategory && showSelectionPanel && (
-            <div className="space-y-3 border-2 rounded-lg p-4 bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/40 shadow-md">
+          {/* Selection Panel - Simplified visibility logic */}
+          {selectedCategory && (
+            <div className="space-y-3 border-2 rounded-lg p-4 bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/40 shadow-md relative z-10 animate-in slide-in-from-top-2 duration-200">
               <div className="flex items-center justify-between">
                 <h4 className="font-semibold text-sm text-primary flex items-center gap-2">
                   {selectedCategory === 'climate' && (

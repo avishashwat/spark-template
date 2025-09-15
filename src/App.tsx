@@ -32,7 +32,7 @@ function App() {
   const [basemap, setBasemap] = useState('osm')
   const [sharedView, setSharedView] = useState<{ center: [number, number], zoom: number }>({
     center: [90.433601, 27.514162], // Bhutan center
-    zoom: 8 // Better initial zoom for single map
+    zoom: 7.5 // Better initial zoom that works well for single map
   })
   
   // Store overlay information for each map
@@ -48,16 +48,16 @@ function App() {
     const getCountryZoom = (baseZoom: number) => {
       switch (mapLayout) {
         case 1: return baseZoom
-        case 2: return Math.max(baseZoom - 1, 3) // Slightly less zoom for 2 maps
-        case 4: return Math.max(baseZoom - 2, 2) // Even less zoom for 4 maps
+        case 2: return Math.max(baseZoom - 0.5, 4) // Less aggressive zoom reduction for 2 maps
+        case 4: return Math.max(baseZoom - 1, 3) // Less aggressive zoom reduction for 4 maps
         default: return baseZoom
       }
     }
     
     const countryBounds = {
-      bhutan: { center: [90.433601, 27.514162] as [number, number], baseZoom: 8 },
-      mongolia: { center: [103.835, 46.862] as [number, number], baseZoom: 5 },
-      laos: { center: [103.865, 18.220] as [number, number], baseZoom: 6 }
+      bhutan: { center: [90.433601, 27.514162] as [number, number], baseZoom: 7.5 },
+      mongolia: { center: [103.835, 46.862] as [number, number], baseZoom: 4.2 },
+      laos: { center: [103.865, 18.220] as [number, number], baseZoom: 5.2 }
     }
     
     const countryConfig = countryBounds[country as keyof typeof countryBounds]
@@ -75,16 +75,16 @@ function App() {
     const getCountryZoom = (baseZoom: number) => {
       switch (layout) {
         case 1: return baseZoom
-        case 2: return Math.max(baseZoom - 1, 3) // Slightly less zoom for 2 maps
-        case 4: return Math.max(baseZoom - 2, 2) // Even less zoom for 4 maps
+        case 2: return Math.max(baseZoom - 0.5, 4) // Less aggressive zoom reduction for 2 maps
+        case 4: return Math.max(baseZoom - 1, 3) // Less aggressive zoom reduction for 4 maps
         default: return baseZoom
       }
     }
     
     const countryBounds = {
-      bhutan: { center: [90.433601, 27.514162] as [number, number], baseZoom: 8 },
-      mongolia: { center: [103.835, 46.862] as [number, number], baseZoom: 5 },
-      laos: { center: [103.865, 18.220] as [number, number], baseZoom: 6 }
+      bhutan: { center: [90.433601, 27.514162] as [number, number], baseZoom: 7.5 },
+      mongolia: { center: [103.835, 46.862] as [number, number], baseZoom: 4.2 },
+      laos: { center: [103.865, 18.220] as [number, number], baseZoom: 5.2 }
     }
     
     const countryConfig = countryBounds[selectedCountry as keyof typeof countryBounds]
