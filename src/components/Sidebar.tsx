@@ -145,6 +145,7 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
       // Hide selection panel after adding layer
       setShowSelectionPanel(false)
       setSelectedCategory('')
+      resetSelections()
     }
   }
 
@@ -189,7 +190,7 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
   return (
     <>
       <Card className="h-full rounded-none border-y-0 border-l-0">
-        <CardHeader className="pb-2 px-4 pt-3">
+        <CardHeader className="pb-1 px-4 pt-3">
           <CardTitle className="flex items-center gap-2 text-sm">
             <Stack className="w-4 h-4 text-primary" />
             Layer Controls
@@ -209,36 +210,56 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
                 <button
                   key={id}
                   className={`flex items-center justify-start w-full h-10 text-sm px-3 border-2 rounded-md transition-all duration-200 hover:bg-primary/10 hover:border-primary/30 ${
-                    selectedCategory === id ? 'bg-primary/10 border-primary/30' : 'bg-white border-border'
+                    selectedCategory === id ? 'bg-primary/10 border-primary text-primary font-medium' : 'bg-white border-border'
                   }`}
                   onClick={() => handleCategoryChange(id)}
                 >
-                  <Icon className={`w-4 h-4 mr-2 ${color}`} />
+                  <Icon className={`w-4 h-4 mr-2 ${selectedCategory === id ? 'text-primary' : color}`} />
                   {label}
-                  <Plus className="w-4 h-4 ml-auto text-muted-foreground" />
+                  {selectedCategory === id ? (
+                    <X className="w-4 h-4 ml-auto text-primary" />
+                  ) : (
+                    <Plus className="w-4 h-4 ml-auto text-muted-foreground" />
+                  )}
                 </button>
               ))}
             </div>
           </div>
 
           {/* Selection Panel */}
-          {selectedCategory && (
-            <div className="space-y-2 border rounded-lg p-2 bg-blue-50/50 border-primary/20">
+          {selectedCategory && showSelectionPanel && (
+            <div className="space-y-3 border-2 rounded-lg p-3 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/30 shadow-sm">
               <div className="flex items-center justify-between">
-                <h4 className="font-medium text-sm text-primary">
-                  {selectedCategory === 'climate' && 'Climate Variables'}
-                  {selectedCategory === 'giri' && 'GIRI Hazards'}
-                  {selectedCategory === 'energy' && 'Energy Infrastructure'}
+                <h4 className="font-semibold text-sm text-primary flex items-center gap-2">
+                  {selectedCategory === 'climate' && (
+                    <>
+                      <Thermometer className="w-4 h-4" />
+                      Configure Climate Variables
+                    </>
+                  )}
+                  {selectedCategory === 'giri' && (
+                    <>
+                      <Drop className="w-4 h-4" />
+                      Configure GIRI Hazards
+                    </>
+                  )}
+                  {selectedCategory === 'energy' && (
+                    <>
+                      <Flashlight className="w-4 h-4" />
+                      Configure Energy Infrastructure
+                    </>
+                  )}
                 </h4>
                 <button 
-                  className="text-muted-foreground hover:text-foreground p-1"
+                  className="text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted transition-colors"
                   onClick={() => {
                     setSelectedCategory('')
                     setShowSelectionPanel(false)
                     resetSelections()
                   }}
+                  title="Close selection panel"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
               
@@ -406,7 +427,7 @@ export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId
           {/* Active Layers */}
           {activeLayers.length > 0 && (
             <>
-              <Separator className="my-2" />
+              <Separator className="my-3" />
               <div className="space-y-2">
                 <h3 className="font-medium text-xs text-muted-foreground">ACTIVE LAYERS</h3>
                 <div className="space-y-2">

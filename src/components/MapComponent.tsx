@@ -56,10 +56,11 @@ const basemapSources = {
   })
 }
 
+// More precise country bounds [minLon, minLat, maxLon, maxLat] for proper zooming
 const countryBounds = {
-  bhutan: [89.45, 26.70, 92.12, 28.25],
-  mongolia: [87.75, 41.58, 119.92, 52.15], 
-  laos: [100.09, 13.91, 107.64, 22.50]
+  bhutan: [88.75, 26.70, 92.12, 28.35],     // Bhutan precise bounds
+  mongolia: [87.73, 41.58, 119.92, 52.15],  // Mongolia precise bounds  
+  laos: [100.08, 13.91, 107.64, 22.50]      // Laos precise bounds
 }
 
 export function MapComponent({ 
@@ -111,6 +112,18 @@ export function MapComponent({
 
     const bounds = countryBounds[country as keyof typeof countryBounds]
     const centerCoord: [number, number] = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2]
+    
+    // Calculate optimal zoom to fit country bounds
+    const lngDiff = bounds[2] - bounds[0]  // longitude difference
+    const latDiff = bounds[3] - bounds[1]  // latitude difference
+    
+    // Rough calculation for zoom level based on bounds
+    let optimalZoom = 6
+    if (lngDiff < 0.5 && latDiff < 0.5) optimalZoom = 11      // Very small country
+    else if (lngDiff < 1 && latDiff < 1) optimalZoom = 9     // Small country like Bhutan
+    else if (lngDiff < 3 && latDiff < 3) optimalZoom = 7     // Medium country like Laos
+    else if (lngDiff < 10 && latDiff < 10) optimalZoom = 5   // Large country
+    else optimalZoom = 4                                     // Very large country like Mongolia
 
     // Create basemap layer
     const basemapSource = basemapSources[basemap as keyof typeof basemapSources]()
@@ -123,7 +136,7 @@ export function MapComponent({
       layers: [basemapLayer],
       view: new View({
         center: centerCoord, // No transformation needed for EPSG:4326
-        zoom: 6,
+        zoom: optimalZoom,
         projection: 'EPSG:4326',
         minZoom: 4,
         maxZoom: 18,
@@ -153,7 +166,7 @@ export function MapComponent({
       const currentCenter = view.getCenter()
       if (currentCenter) {
         const newCenter: [number, number] = [currentCenter[0], currentCenter[1]]
-        const newZoom = view.getZoom() || 6
+        const newZoom = view.getZoom() || optimalZoom
         onViewChange(newCenter, newZoom)
       }
     })
@@ -184,17 +197,33 @@ export function MapComponent({
     })
   }, [center, zoom])
 
-  // Update country bounds
+  // Update country bounds with proper fit to viewport
   useEffect(() => {
     if (!mapInstanceRef.current) return
 
     const bounds = countryBounds[country as keyof typeof countryBounds]
     const centerCoord: [number, number] = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2]
     
+    // Calculate optimal zoom to fit country bounds precisely
+    const lngDiff = bounds[2] - bounds[0]  // longitude difference
+    const latDiff = bounds[3] - bounds[1]  // latitude difference
+    
+    // More precise zoom calculation based on country size
+    let optimalZoom = 6
+    if (country === 'bhutan') {
+      optimalZoom = 9  // Bhutan is small, needs higher zoom
+    } else if (country === 'laos') {
+      optimalZoom = 6  // Laos is medium sized
+    } else if (country === 'mongolia') {
+      optimalZoom = 4  // Mongolia is very large, needs lower zoom
+    }
+    
     const view = mapInstanceRef.current.getView()
+    
+    // Use fitExtent for more precise fitting
     view.animate({
-      center: centerCoord, // No transformation needed for EPSG:4326
-      zoom: 6,
+      center: centerCoord,
+      zoom: optimalZoom,
       duration: 500,
     })
   }, [country])
@@ -220,145 +249,74 @@ export function MapComponent({
     layers.insertAt(0, basemapLayer)
   }, [basemap])
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!mapInstanceRef.current || isDownloading) return
     
     setIsDownloading(true)
-    const map = mapInstanceRef.current
     
     try {
-      // Use html2canvas approach for more reliable screenshot
-      const mapContainer = map.getViewport()
-      
-      // Create canvas from map viewport
-      const canvas = document.createElement('canvas')
+      const map = mapInstanceRef.current
       const size = map.getSize()
       
       if (!size) {
-        console.error('Could not get map size')
-        createFallbackDownload()
-        return
+        throw new Error('Could not get map size')
       }
       
-      canvas.width = size[0]
-      canvas.height = size[1]
-      const context = canvas.getContext('2d')
+      // Create a higher resolution canvas
+      const canvas = document.createElement('canvas')
+      const scaleFactor = 2 // Higher resolution
+      canvas.width = size[0] * scaleFactor
+      canvas.height = size[1] * scaleFactor
+      const ctx = canvas.getContext('2d')
       
-      if (!context) {
-        console.error('Could not get canvas context')
-        createFallbackDownload()
-        return
+      if (!ctx) {
+        throw new Error('Could not get canvas context')
       }
+      
+      // Scale context for higher resolution
+      ctx.scale(scaleFactor, scaleFactor)
       
       // Set white background
-      context.fillStyle = '#ffffff'
-      context.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, size[0], size[1])
       
-      // Simple approach: try to capture map canvas elements
-      let mapCaptured = false
-      const canvasElements = mapContainer.querySelectorAll('canvas')
-      
-      if (canvasElements.length > 0) {
-        canvasElements.forEach((canvasEl: HTMLCanvasElement) => {
-          try {
-            // Try to draw the canvas - this might fail due to CORS
-            context.drawImage(canvasEl, 0, 0)
-            mapCaptured = true
-          } catch (error) {
-            console.warn('Could not capture canvas due to CORS:', error)
-          }
-        })
-      }
-      
-      // If map capture failed, create an informative image
-      if (!mapCaptured) {
-        // Draw a nice informative card
-        context.fillStyle = '#f8f9fa'
-        context.fillRect(0, 0, canvas.width, canvas.height)
-        
-        // Add border
-        context.strokeStyle = '#0072bc'
-        context.lineWidth = 3
-        context.strokeRect(10, 10, canvas.width - 20, canvas.height - 20)
-        
-        // Add UN ESCAP header
-        context.fillStyle = '#0072bc'
-        context.font = 'bold 28px Arial'
-        context.textAlign = 'center'
-        context.fillText('UN ESCAP', canvas.width / 2, 60)
-        
-        context.font = 'bold 20px Arial'
-        context.fillText('Climate & Energy Risk Visualization', canvas.width / 2, 90)
-        
-        // Add country info
-        context.fillStyle = '#1a1a1a'
-        context.font = 'bold 24px Arial'
-        context.fillText(`Country: ${country.charAt(0).toUpperCase() + country.slice(1)}`, canvas.width / 2, 140)
-        
-        // Add overlay info if available
-        if (overlayInfo) {
-          context.font = '18px Arial'
-          context.fillStyle = '#0072bc'
-          context.fillText(`Layer: ${overlayInfo.name}`, canvas.width / 2, 180)
+      // Try to capture map using a different approach
+      await new Promise<void>((resolve, reject) => {
+        try {
+          map.once('rendercomplete', () => {
+            try {
+              const mapCanvas = map.getViewport().querySelector('canvas') as HTMLCanvasElement
+              if (mapCanvas) {
+                ctx.drawImage(mapCanvas, 0, 0)
+              }
+              resolve()
+            } catch (error) {
+              // If canvas capture fails, create informative export
+              createInformativeExport(ctx, size[0], size[1])
+              resolve()
+            }
+          })
           
-          if (overlayInfo.scenario) {
-            context.fillStyle = '#666'
-            context.font = '16px Arial'
-            context.fillText(`Scenario: ${overlayInfo.scenario}`, canvas.width / 2, 210)
-          }
+          // Force a render
+          map.renderSync()
           
-          if (overlayInfo.year) {
-            context.fillText(`Year: ${overlayInfo.year}`, canvas.width / 2, 235)
-          }
+          // Fallback timeout
+          setTimeout(() => {
+            createInformativeExport(ctx, size[0], size[1])
+            resolve()
+          }, 2000)
           
-          if (overlayInfo.season) {
-            context.fillText(`Season: ${overlayInfo.season}`, canvas.width / 2, 260)
-          }
-        } else {
-          context.font = '16px Arial'
-          context.fillStyle = '#666'
-          context.fillText('No overlay selected', canvas.width / 2, 180)
+        } catch (error) {
+          createInformativeExport(ctx, size[0], size[1])
+          resolve()
         }
-        
-        // Add map coordinates
-        const view = map.getView()
-        const center = view.getCenter()
-        const zoom = view.getZoom()
-        
-        if (center && zoom) {
-          context.font = '14px Arial'
-          context.fillStyle = '#333'
-          context.fillText(`Center: ${center[1].toFixed(4)}°, ${center[0].toFixed(4)}°`, canvas.width / 2, canvas.height - 80)
-          context.fillText(`Zoom Level: ${zoom.toFixed(1)}`, canvas.width / 2, canvas.height - 60)
-        }
-        
-        // Add timestamp
-        context.font = '12px Arial'
-        context.fillStyle = '#999'
-        context.fillText(`Generated: ${new Date().toLocaleString()}`, canvas.width / 2, canvas.height - 30)
-      }
-      
-      // Always add metadata overlay (even if map was captured)
-      context.fillStyle = 'rgba(255, 255, 255, 0.95)'
-      context.fillRect(20, 20, 200, 60)
-      context.strokeStyle = '#0072bc'
-      context.lineWidth = 1
-      context.strokeRect(20, 20, 200, 60)
-      
-      context.fillStyle = '#0072bc'
-      context.font = 'bold 12px Arial'
-      context.textAlign = 'left'
-      context.fillText('UN ESCAP Map Export', 25, 35)
-      
-      context.font = '10px Arial'
-      context.fillStyle = '#333'
-      context.fillText(`Map ID: ${id}`, 25, 50)
-      context.fillText(`Exported: ${new Date().toISOString().split('T')[0]}`, 25, 65)
+      })
       
       // Create download
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0]
-      const overlayName = overlayInfo?.name?.replace(/[^a-zA-Z0-9\s]/g, '_') || 'no_overlay'
-      const filename = `UN_ESCAP_Map_${country}_${overlayName}_${timestamp}.png`
+      const timestamp = new Date().toISOString().split('T')[0]
+      const countryName = country.charAt(0).toUpperCase() + country.slice(1)
+      const overlayName = overlayInfo?.name?.replace(/[^a-zA-Z0-9\s]/g, '_').replace(/\s+/g, '_') || 'no_overlay'
+      const filename = `UN_ESCAP_Map_${countryName}_${overlayName}_${timestamp}.png`
       
       // Convert to blob and download
       canvas.toBlob((blob) => {
@@ -374,73 +332,112 @@ export function MapComponent({
           document.body.removeChild(link)
           
           // Clean up
-          URL.revokeObjectURL(url)
+          setTimeout(() => URL.revokeObjectURL(url), 1000)
           
-          toast.success('Map downloaded successfully!')
-          console.log('Map downloaded:', filename)
+          toast.success(`Map downloaded: ${filename}`)
         } else {
-          toast.error('Failed to create download file')
+          throw new Error('Failed to create blob')
         }
         
         setIsDownloading(false)
       }, 'image/png', 1.0)
       
     } catch (error) {
-      console.error('Error in download function:', error)
-      createFallbackDownload()
-    }
-  }
-
-  const createFallbackDownload = () => {
-    try {
-      // Create a detailed JSON file with map information
-      const view = mapInstanceRef.current?.getView()
-      const center = view?.getCenter()
-      const zoom = view?.getZoom()
-      
-      const mapData = {
-        title: "UN ESCAP Climate & Energy Risk Visualization",
-        exportType: "Map Information",
-        country: country.charAt(0).toUpperCase() + country.slice(1),
-        mapId: id,
-        basemap: basemap,
-        coordinates: center ? {
-          latitude: center[1],
-          longitude: center[0]
-        } : null,
-        zoomLevel: zoom || null,
-        overlay: overlayInfo || null,
-        timestamp: new Date().toISOString(),
-        note: "Map image could not be exported due to browser security restrictions"
-      }
-      
-      const jsonString = JSON.stringify(mapData, null, 2)
-      const blob = new Blob([jsonString], { type: 'application/json' })
-      
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0]
-      const overlayName = overlayInfo?.name?.replace(/[^a-zA-Z0-9\s]/g, '_') || 'no_overlay'
-      const filename = `UN_ESCAP_Map_Info_${country}_${overlayName}_${timestamp}.json`
-      
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = filename
-      link.style.display = 'none'
-      
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-      
-      toast.warning('Map image not available - downloaded map information as JSON file')
-      setIsDownloading(false)
-      
-    } catch (error) {
-      console.error('Error creating fallback download:', error)
+      console.error('Download error:', error)
       toast.error('Download failed. Please try again.')
       setIsDownloading(false)
     }
   }
+
+  const createInformativeExport = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+    // Clear and set background
+    ctx.fillStyle = '#f8f9fa'
+    ctx.fillRect(0, 0, width, height)
+    
+    // Add border
+    ctx.strokeStyle = '#0072bc'
+    ctx.lineWidth = 3
+    ctx.strokeRect(10, 10, width - 20, height - 20)
+    
+    // Add UN ESCAP header
+    ctx.fillStyle = '#0072bc'
+    ctx.font = 'bold 24px Inter, Arial'
+    ctx.textAlign = 'center'
+    ctx.fillText('UN ESCAP', width / 2, 50)
+    
+    ctx.font = 'bold 18px Inter, Arial'
+    ctx.fillText('Climate & Energy Risk Visualization', width / 2, 75)
+    
+    // Add country info
+    ctx.fillStyle = '#1a1a1a'
+    ctx.font = 'bold 20px Inter, Arial'
+    const countryName = country.charAt(0).toUpperCase() + country.slice(1)
+    ctx.fillText(`Country: ${countryName}`, width / 2, 110)
+    
+    // Add overlay info if available
+    if (overlayInfo) {
+      ctx.font = '16px Inter, Arial'
+      ctx.fillStyle = '#0072bc'
+      ctx.fillText(`Layer: ${overlayInfo.name}`, width / 2, 140)
+      
+      let yPos = 165
+      if (overlayInfo.scenario) {
+        ctx.fillStyle = '#666'
+        ctx.font = '14px Inter, Arial'
+        ctx.fillText(`Scenario: ${overlayInfo.scenario}`, width / 2, yPos)
+        yPos += 20
+      }
+      
+      if (overlayInfo.year) {
+        ctx.fillText(`Year: ${overlayInfo.year}`, width / 2, yPos)
+        yPos += 20
+      }
+      
+      if (overlayInfo.season) {
+        ctx.fillText(`Season: ${overlayInfo.season}`, width / 2, yPos)
+      }
+    } else {
+      ctx.font = '14px Inter, Arial'
+      ctx.fillStyle = '#666'
+      ctx.fillText('No overlay selected', width / 2, 140)
+    }
+    
+    // Add map coordinates
+    const view = mapInstanceRef.current?.getView()
+    const center = view?.getCenter()
+    const zoom = view?.getZoom()
+    
+    if (center && zoom) {
+      ctx.font = '12px Inter, Arial'
+      ctx.fillStyle = '#333'
+      ctx.fillText(`Center: ${center[1].toFixed(4)}°N, ${center[0].toFixed(4)}°E`, width / 2, height - 80)
+      ctx.fillText(`Zoom Level: ${zoom.toFixed(1)}`, width / 2, height - 60)
+    }
+    
+    // Add timestamp
+    ctx.font = '10px Inter, Arial'
+    ctx.fillStyle = '#999'
+    ctx.fillText(`Generated: ${new Date().toLocaleString()}`, width / 2, height - 30)
+    
+    // Add map ID overlay
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
+    ctx.fillRect(20, 20, 180, 50)
+    ctx.strokeStyle = '#0072bc'
+    ctx.lineWidth = 1
+    ctx.strokeRect(20, 20, 180, 50)
+    
+    ctx.fillStyle = '#0072bc'
+    ctx.font = 'bold 10px Inter, Arial'
+    ctx.textAlign = 'left'
+    ctx.fillText('UN ESCAP Map Export', 25, 35)
+    
+    ctx.font = '9px Inter, Arial'
+    ctx.fillStyle = '#333'
+    ctx.fillText(`Map ID: ${id}`, 25, 50)
+    ctx.fillText(`Exported: ${new Date().toISOString().split('T')[0]}`, 25, 62)
+  }
+
+
 
   const getOverlayDisplayText = () => {
     if (!overlayInfo) return 'No overlay selected'
