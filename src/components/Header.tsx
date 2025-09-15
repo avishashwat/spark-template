@@ -12,12 +12,21 @@ interface HeaderProps {
   onLayoutChange: (layout: number) => void
   showDashboard: boolean
   onToggleDashboard: () => void
+  basemap: string
+  onBasemapChange: (basemap: string) => void
 }
 
 const countries = [
   { value: 'bhutan', label: 'Bhutan' },
   { value: 'mongolia', label: 'Mongolia' },
   { value: 'laos', label: 'Laos' }
+]
+
+const basemaps = [
+  { id: 'osm', name: 'OpenStreetMap' },
+  { id: 'satellite', name: 'Satellite' },
+  { id: 'terrain', name: 'Terrain' },
+  { id: 'street', name: 'Street Map' }
 ]
 
 const layouts = [
@@ -32,19 +41,21 @@ export function Header({
   mapLayout, 
   onLayoutChange,
   showDashboard,
-  onToggleDashboard 
+  onToggleDashboard,
+  basemap,
+  onBasemapChange
 }: HeaderProps) {
   return (
     <Card className="rounded-none border-x-0 border-t-0 bg-background/80 backdrop-blur-sm">
-      <div className="flex items-center justify-between px-6 py-4">
+      <div className="flex items-center justify-between px-6 py-2">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <Globe weight="fill" className="w-6 h-6 text-primary-foreground" />
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+              <Globe weight="fill" className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">UN ESCAP</h1>
-              <p className="text-sm text-muted-foreground">Climate & Energy Risk Analysis</p>
+              <h1 className="text-lg font-bold text-foreground">UN ESCAP</h1>
+              <p className="text-xs text-muted-foreground">Climate & Energy Risk Analysis</p>
             </div>
           </div>
           
@@ -52,7 +63,7 @@ export function Header({
             <div className="flex items-center gap-2">
               <Globe className="w-4 h-4 text-muted-foreground" />
               <Select value={selectedCountry} onValueChange={onCountryChange}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-28 h-8">
                   <SelectValue placeholder="Country" />
                 </SelectTrigger>
                 <SelectContent>
@@ -78,7 +89,7 @@ export function Header({
                   variant={mapLayout === layout.value ? "default" : "outline"}
                   size="sm"
                   onClick={() => onLayoutChange(layout.value)}
-                  className="h-8 px-3"
+                  className="h-7 px-2 text-xs"
                 >
                   {layout.label}
                 </Button>
@@ -86,19 +97,31 @@ export function Header({
             </div>
           </div>
           
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Basemap:</span>
+            <Select value={basemap} onValueChange={onBasemapChange}>
+              <SelectTrigger className="w-32 h-7">
+                <SelectValue placeholder="Basemap" />
+              </SelectTrigger>
+              <SelectContent>
+                {basemaps.map((map) => (
+                  <SelectItem key={map.id} value={map.id}>
+                    {map.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
           <Button
             variant={showDashboard ? "default" : "outline"}
             size="sm"
             onClick={onToggleDashboard}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 h-7 px-2 text-xs"
           >
             <ChartBar className="w-4 h-4" />
             Dashboard
           </Button>
-          
-          <Badge variant="secondary" className="bg-accent/10 text-accent">
-            {mapLayout} Map{mapLayout > 1 ? 's' : ''} Active
-          </Badge>
         </div>
       </div>
     </Card>

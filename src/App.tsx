@@ -31,7 +31,7 @@ function App() {
   const [basemap, setBasemap] = useState('osm')
   const [sharedView, setSharedView] = useState<{ center: [number, number], zoom: number }>({
     center: [90.433601, 27.514162], // Bhutan center
-    zoom: 6
+    zoom: 8 // Higher zoom for province visibility
   })
   
   // Store overlay information for each map
@@ -43,15 +43,15 @@ function App() {
     // Clear overlays when changing country
     setMapOverlays({})
     
-    // Update shared view based on country
+    // Update shared view based on country with better bounds for Bhutan
     const countryBounds = {
-      bhutan: [90.433601, 27.514162] as [number, number],
-      mongolia: [103.835, 46.862] as [number, number], 
-      laos: [103.865, 18.220] as [number, number]
+      bhutan: { center: [90.433601, 27.514162] as [number, number], zoom: 8 }, // Higher zoom for province visibility
+      mongolia: { center: [103.835, 46.862] as [number, number], zoom: 5 }, 
+      laos: { center: [103.865, 18.220] as [number, number], zoom: 6 }
     }
     
-    const newCenter = countryBounds[country as keyof typeof countryBounds]
-    setSharedView({ center: newCenter, zoom: 6 })
+    const countryConfig = countryBounds[country as keyof typeof countryBounds]
+    setSharedView({ center: countryConfig.center, zoom: countryConfig.zoom })
   }, [])
 
   const handleLayoutChange = useCallback((layout: number) => {
@@ -59,6 +59,9 @@ function App() {
     setActiveMapId('map-1') // Reset to first map when layout changes
     // Clear overlays when changing layout
     setMapOverlays({})
+    
+    // Force clear any active layers in the sidebar component
+    // This will be handled by updating sidebar's active layers state
   }, [])
 
   const handleMapActivate = useCallback((mapId: string) => {
@@ -148,6 +151,8 @@ function App() {
         onLayoutChange={handleLayoutChange}
         showDashboard={showDashboard}
         onToggleDashboard={() => setShowDashboard(!showDashboard)}
+        basemap={basemap}
+        onBasemapChange={handleBasemapChange}
       />
       
       <div className="flex-1 flex overflow-hidden">
@@ -156,8 +161,7 @@ function App() {
           <Sidebar
             activeMapId={activeMapId}
             onLayerChange={handleLayerChange}
-            basemap={basemap}
-            onBasemapChange={handleBasemapChange}
+            mapLayout={mapLayout} // Pass layout to clear layers on change
           />
         </div>
         

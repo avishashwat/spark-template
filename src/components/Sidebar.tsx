@@ -1,11 +1,11 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
-import { Stack, Thermometer, Drop, Flashlight, Eye, EyeSlash, Globe, X, Plus } from '@phosphor-icons/react'
+import { Stack, Thermometer, Drop, Flashlight, Eye, EyeSlash, X, Plus } from '@phosphor-icons/react'
 
 interface LayerConfig {
   id: string
@@ -14,20 +14,6 @@ interface LayerConfig {
   visible: boolean
   opacity: number
 }
-
-interface SidebarProps {
-  activeMapId: string
-  onLayerChange: (mapId: string, layer: LayerConfig | null) => void
-  basemap: string
-  onBasemapChange: (basemap: string) => void
-}
-
-const basemaps = [
-  { id: 'osm', name: 'OpenStreetMap' },
-  { id: 'satellite', name: 'Satellite' },
-  { id: 'terrain', name: 'Terrain' },
-  { id: 'street', name: 'Street Map' }
-]
 
 const climateVariables = [
   'Maximum Temperature',
@@ -76,7 +62,7 @@ const energyInfrastructure = [
   'Wind Power Plants'
 ]
 
-export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }: SidebarProps) {
+export function Sidebar({ activeMapId, onLayerChange, mapLayout }: { activeMapId: string, onLayerChange: (mapId: string, layer: LayerConfig | null) => void, mapLayout: number }) {
   const [selectedCategory, setSelectedCategory] = useState<string>('')
   const [showSelectionPanel, setShowSelectionPanel] = useState(false)
   const [climateVariable, setClimateVariable] = useState<string>('')
@@ -88,6 +74,12 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
   const [giriScenario, setGiriScenario] = useState<string>('')
   const [energyType, setEnergyType] = useState<string>('')
   const [activeLayers, setActiveLayers] = useState<LayerConfig[]>([])
+
+  // Clear layers when layout changes
+  useEffect(() => {
+    setActiveLayers([])
+    resetSelections()
+  }, [mapLayout])
 
   const resetSelections = () => {
     setClimateVariable('')
@@ -205,28 +197,6 @@ export function Sidebar({ activeMapId, onLayerChange, basemap, onBasemapChange }
         </CardHeader>
         
         <CardContent className="space-y-4 custom-scroll overflow-y-auto max-h-[calc(100vh-120px)] px-4">
-          {/* Basemap Selection */}
-          <div className="space-y-2">
-            <h3 className="font-medium text-xs text-muted-foreground flex items-center gap-2">
-              <Globe className="w-3 h-3" />
-              BASEMAP
-            </h3>
-            <Select value={basemap} onValueChange={onBasemapChange}>
-              <SelectTrigger className="h-8 text-sm">
-                <SelectValue placeholder="Select basemap" />
-              </SelectTrigger>
-              <SelectContent>
-                {basemaps.map(map => (
-                  <SelectItem key={map.id} value={map.id} className="text-sm">
-                    {map.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Separator className="my-3" />
-
           {/* Data Categories */}
           <div className="space-y-2">
             <h3 className="font-medium text-xs text-muted-foreground">DATA LAYERS</h3>
