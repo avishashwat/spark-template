@@ -1,1 +1,112 @@
-/* This is where custom CSS goes */
+@import 'tailwindcss';
+@import "tw-animate-css";
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+}
+
+:root {
+  /* UN ESCAP Official Colors */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.2 0.01 258.34);
+  --card: oklch(0.98 0.001 258.34);
+  --card-foreground: oklch(0.2 0.01 258.34);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.01 258.34);
+  
+  /* Primary: UN Blue #0072bc */
+  --primary: oklch(0.48 0.13 258.34);
+  --primary-foreground: oklch(1 0 0);
+  
+  /* Secondary: Light Blue #009edb */
+  --secondary: oklch(0.62 0.12 218.75);
+  --secondary-foreground: oklch(1 0 0);
+  
+  /* Accent: Green #56c02b */
+  --accent: oklch(0.72 0.15 127.72);
+  --accent-foreground: oklch(1 0 0);
+  
+  --muted: oklch(0.96 0.001 258.34);
+  --muted-foreground: oklch(0.46 0.006 258.34);
+  --destructive: oklch(0.55 0.18 17.38);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.9 0.003 258.34);
+  --input: oklch(0.9 0.003 258.34);
+  --ring: oklch(0.48 0.13 258.34);
+  
+  --radius: 0.5rem;
+}
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+/* OpenLayers map styles */
+.ol-map {
+  width: 100%;
+  height: 100%;
+}
+
+.ol-zoom {
+  top: 10px;
+  left: 10px;
+}
+
+.ol-attribution {
+  bottom: 4px;
+  right: 4px;
+  font-size: 10px;
+}
+
+/* Map container styles */
+.map-container {
+  position: relative;
+  border: 2px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.map-container.active {
+  border-color: var(--primary);
+}
+
+/* Custom scrollbar for panels */
+.custom-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scroll::-webkit-scrollbar-track {
+  background: var(--muted);
+}
+
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
