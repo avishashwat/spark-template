@@ -13,6 +13,7 @@ import { Download, ChartBar, Table, MapPin, CaretDown, ArrowLeft } from '@phosph
 import { ChartView, TableView } from './DataVisualization'
 import { RasterLegend } from './RasterLegend'
 import { EnergyLegend } from './EnergyLegend'
+import { scheduleUpdate, PerformanceCache } from '@/utils/performance'
 import { toast } from 'sonner'
 import 'ol/ol.css'
 
@@ -91,12 +92,22 @@ export function MapComponent({
   const [showDropdown, setShowDropdown] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   
-  // Cache for boundary data to avoid repeated loading
-  const boundaryCache = useRef<Map<string, any>>(new Map())
+  // Enhanced performance caching system
+  const boundaryCache = useRef<PerformanceCache<string, any>>(new PerformanceCache(50, 10 * 60 * 1000)) // 10 min TTL
   const loadingPromises = useRef<Map<string, Promise<any>>>(new Map())
-  // Cache for processed mask geometries to avoid heavy re-computation
-  const maskCache = useRef<Map<string, { maskFeature: any, boundaryLayer: VectorLayer<VectorSource> }>>(new Map())
+  const maskCache = useRef<PerformanceCache<string, { maskFeature: any, boundaryLayer: VectorLayer<VectorSource> }>>(new PerformanceCache(20, 10 * 60 * 1000))
   const [boundaryLoading, setBoundaryLoading] = useState(false)
+  
+  // Optimized view change handler using requestAnimationFrame
+  const scheduledViewUpdate = useRef<((center: [number, number], zoom: number) => void) | null>(null)
+  
+  useEffect(() => {
+    scheduledViewUpdate.current = scheduleUpdate((center: [number, number], zoom: number) => {
+      if (isActive && !isUpdating) {
+        onViewChange(center, zoom)
+      }
+    })
+  }, [isActive, isUpdating, onViewChange])
   
   // Province zoom state
   const [isProvinceView, setIsProvinceView] = useState(false)
@@ -179,16 +190,16 @@ export function MapComponent({
 
     mapInstanceRef.current = map
 
-    // Handle view changes
+    // Handle view changes with optimized synchronization
     const view = map.getView()
     view.on('change', () => {
       if (isUpdating) return
       
       const currentCenter = view.getCenter()
-      if (currentCenter) {
+      if (currentCenter && scheduledViewUpdate.current) {
         const newCenter: [number, number] = [currentCenter[0], currentCenter[1]]
         const newZoom = view.getZoom() || optimalZoom
-        onViewChange(newCenter, newZoom)
+        scheduledViewUpdate.current(newCenter, newZoom)
       }
     })
 
@@ -280,11 +291,11 @@ export function MapComponent({
     layers.insertAt(0, basemapLayer)
   }, [basemap])
 
-  // Optimized boundary data loading with caching
+  // Optimized boundary data loading with enhanced caching
   const loadBoundaryData = useCallback(async (country: string): Promise<any> => {
-    // Check cache first
+    // Check performance cache first
     if (boundaryCache.current.has(country)) {
-      console.log('Loading boundary from cache for:', country)
+      console.log('Loading boundary from performance cache for:', country)
       return boundaryCache.current.get(country)
     }
     
@@ -294,8 +305,9 @@ export function MapComponent({
       return loadingPromises.current.get(country)
     }
     
-    // Create new loading promise
+    // Create new loading promise with performance tracking
     const loadingPromise = (async () => {
+      const startTime = performance.now()
       try {
         console.log('Loading boundary data for country:', country)
         
@@ -325,7 +337,7 @@ export function MapComponent({
               const chunkMeta = metaOrData
               console.log(`Loading ${chunkMeta.totalChunks} chunks in parallel for ${key}`)
               
-              // Load all chunks in parallel for faster loading
+              // Load all chunks in parallel with Promise.allSettled for better error handling
               const chunkPromises: Promise<string | undefined>[] = []
               for (let i = 0; i < chunkMeta.totalChunks; i++) {
                 chunkPromises.push(
@@ -333,14 +345,25 @@ export function MapComponent({
                 )
               }
               
-              const chunks = await Promise.all(chunkPromises)
+              console.log(`Loading ${chunkMeta.totalChunks} chunks in parallel for ${key}...`)
+              const chunkStartTime = performance.now()
               
-              // Verify all chunks are present
-              for (let i = 0; i < chunks.length; i++) {
-                if (!chunks[i]) {
-                  throw new Error(`Missing chunk ${i} for ${key}`)
+              const results = await Promise.allSettled(chunkPromises)
+              const chunks: string[] = []
+              
+              // Process results and handle any failures
+              for (let i = 0; i < results.length; i++) {
+                const result = results[i]
+                if (result.status === 'fulfilled' && result.value) {
+                  chunks[i] = result.value
+                } else {
+                  console.error(`Failed to load chunk ${i} for ${key}:`, result)
+                  throw new Error(`Failed to load chunk ${i} for ${key}`)
                 }
               }
+              
+              const chunkLoadTime = performance.now() - chunkStartTime
+              console.log(`Loaded ${chunks.length} chunks in ${chunkLoadTime.toFixed(2)}ms`)
               
               // Reconstruct data
               const reconstructedData = chunks.join('')
@@ -370,12 +393,17 @@ export function MapComponent({
           return null
         }
         
-        // Cache the loaded data
+        // Create result and cache it
         const result = {
           geojsonData,
           hoverAttribute: countryBoundary.hoverAttribute
         }
+        
+        // Store in performance cache
         boundaryCache.current.set(country, result)
+        
+        const totalLoadTime = performance.now() - startTime
+        console.log(`Boundary loaded for ${country} in ${totalLoadTime.toFixed(2)}ms (${geojsonData.features?.length} features)`)
         
         return result
       } catch (error) {
@@ -441,6 +469,7 @@ export function MapComponent({
     }
     
     console.log('Creating new mask and boundary layers for:', country)
+    const startTime = performance.now()
     
     // Create boundary source
     const geojsonFormat = new GeoJSON()
@@ -586,13 +615,14 @@ export function MapComponent({
       maskLayer.set('layerType', 'countryMask')
     }
     
-    // Cache the created layers and mask feature
+    // Cache the created layers and mask feature in performance cache
     maskCache.current.set(country, {
       maskFeature,
       boundaryLayer
     })
     
-    console.log('Cached mask and boundary layers for:', country)
+    const creationTime = performance.now() - startTime
+    console.log(`Created and cached mask/boundary layers for ${country} in ${creationTime.toFixed(2)}ms`)
     
     return { maskLayer, boundaryLayer }
   }, [])

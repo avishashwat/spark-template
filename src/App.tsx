@@ -29,16 +29,88 @@ function MainApp() {
   const [selectedCountry, setSelectedCountry] = useState('bhutan')
   const [mapLayout, setMapLayout] = useState(1)
   const [showDashboard, setShowDashboard] = useState(false)
-  const [showSidebar, setShowSidebar] = useState(true) // Add sidebar toggle
+  const [showSidebar, setShowSidebar] = useState(true)
   const [activeMapId, setActiveMapId] = useState('map-1')
   const [basemap, setBasemap] = useState('osm')
   const [sharedView, setSharedView] = useState<{ center: [number, number], zoom: number }>({
     center: [90.433601, 27.514162], // Bhutan center
-    zoom: 7.5 // Better initial zoom that works well for single map
+    zoom: 7.5
   })
   
   // Store overlay information for each map
   const [mapOverlays, setMapOverlays] = useState<Record<string, any>>({})
+  
+  // Pre-load boundary data for all countries on app start for better performance
+  useEffect(() => {
+    const preloadBoundaries = async () => {
+      const countries = ['bhutan', 'mongolia', 'laos']
+      console.log('Pre-loading boundary data for faster map switching...')
+      
+      const boundaryFiles = await window.spark.kv.get<any[]>('admin_boundary_files') || []
+      
+      // Load all countries in parallel
+      const preloadPromises = countries.map(async (country) => {
+        const countryBoundary = boundaryFiles.find(file => file.country === country)
+        if (countryBoundary && countryBoundary.dataKey) {
+          try {
+            // Trigger boundary loading to populate cache
+            const startTime = performance.now()
+            
+            // Load from chunked storage in the background
+            const getDataFromChunks = async (key: string): Promise<any> => {
+              const metaOrData = await window.spark.kv.get<any>(key)
+              
+              if (!metaOrData) return null
+              
+              if (metaOrData && typeof metaOrData === 'object' && 'isChunked' in metaOrData && metaOrData.isChunked) {
+                const chunkMeta = metaOrData
+                
+                const chunkPromises: Promise<string | undefined>[] = []
+                for (let i = 0; i < chunkMeta.totalChunks; i++) {
+                  chunkPromises.push(window.spark.kv.get<string>(`${key}_chunk_${i}`))
+                }
+                
+                const results = await Promise.allSettled(chunkPromises)
+                const chunks: string[] = []
+                
+                for (let i = 0; i < results.length; i++) {
+                  const result = results[i]
+                  if (result.status === 'fulfilled' && result.value) {
+                    chunks[i] = result.value
+                  } else {
+                    throw new Error(`Failed to load chunk ${i} for ${key}`)
+                  }
+                }
+                
+                const reconstructedData = chunks.join('')
+                return JSON.parse(reconstructedData)
+              }
+              
+              return metaOrData
+            }
+            
+            const fullBoundaryData = await getDataFromChunks(countryBoundary.dataKey)
+            const loadTime = performance.now() - startTime
+            console.log(`Pre-loaded boundary for ${country} in ${loadTime.toFixed(2)}ms`)
+            
+            return { country, data: fullBoundaryData }
+          } catch (error) {
+            console.error(`Failed to pre-load boundary for ${country}:`, error)
+            return null
+          }
+        }
+        return null
+      })
+      
+      const results = await Promise.allSettled(preloadPromises)
+      const successCount = results.filter(r => r.status === 'fulfilled' && r.value).length
+      console.log(`Pre-loaded ${successCount}/${countries.length} country boundaries`)
+    }
+    
+    // Start pre-loading after a short delay to not block initial render
+    const timer = setTimeout(preloadBoundaries, 100)
+    return () => clearTimeout(timer)
+  }, [])
 
   const handleCountryChange = useCallback((country: string) => {
     setSelectedCountry(country)
