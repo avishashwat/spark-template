@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/Sidebar'
 import { Dashboard } from '@/components/Dashboard'
 import { useMockData } from '@/hooks/useMockData'
 import { useKV } from '@github/spark/hooks'
+import { Toaster } from 'sonner'
 
 interface MapInstance {
   id: string
@@ -183,6 +184,9 @@ function App() {
           </div>
         )}
       </div>
+      
+      {/* Toast notifications */}
+      <Toaster position="bottom-right" />
     </div>
   )
 }

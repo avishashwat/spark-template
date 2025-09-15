@@ -6,6 +6,7 @@ import { defaults as defaultControls, Zoom, ScaleLine } from 'ol/control'
 import { Download, ChartBar, Table, MapPin, CaretDown } from '@phosphor-icons/react'
 import { ChartView, TableView } from './DataVisualization'
 import { RasterLegend } from './RasterLegend'
+import { toast } from 'sonner'
 import 'ol/ol.css'
 
 interface MapComponentProps {
@@ -78,6 +79,7 @@ export function MapComponent({
   const [isUpdating, setIsUpdating] = useState(false)
   const [viewMode, setViewMode] = useState<'map' | 'chart' | 'table'>('map')
   const [showDropdown, setShowDropdown] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
   
   // Only show dropdown in multi-map mode (2 or 4 maps)
   const showViewSelector = mapLayout > 1
@@ -219,80 +221,232 @@ export function MapComponent({
   }, [basemap])
 
   const handleDownload = () => {
-    if (!mapInstanceRef.current) return
+    if (!mapInstanceRef.current || isDownloading) return
     
+    setIsDownloading(true)
     const map = mapInstanceRef.current
     
     try {
+      // Wait for all layers to render completely
       map.once('rendercomplete', () => {
-        try {
-          const mapCanvas = document.createElement('canvas')
-          const size = map.getSize()
-          if (!size) return
-          
-          mapCanvas.width = size[0]
-          mapCanvas.height = size[1]
-          const mapContext = mapCanvas.getContext('2d')
-          if (!mapContext) return
-          
-          // Set a white background
-          mapContext.fillStyle = '#ffffff'
-          mapContext.fillRect(0, 0, mapCanvas.width, mapCanvas.height)
-          
-          Array.prototype.forEach.call(
-            map.getViewport().querySelectorAll('.ol-layer canvas, canvas.ol-layer'),
-            (canvas: HTMLCanvasElement) => {
-              if (canvas.width > 0) {
-                try {
-                  const opacity = canvas.parentElement?.style.opacity || canvas.style.opacity
-                  mapContext.globalAlpha = opacity === '' ? 1 : Number(opacity)
-                  
-                  let matrix
-                  const transform = canvas.style.transform
-                  if (transform) {
-                    matrix = transform
-                      .match(/^matrix\(([^\(]*)\)$/)?.[1]
-                      ?.split(',')
-                      ?.map(Number)
+        setTimeout(() => { // Small delay to ensure rendering is complete
+          try {
+            const mapCanvas = document.createElement('canvas')
+            const size = map.getSize()
+            if (!size) {
+              console.error('Could not get map size')
+              // Fallback: Create information card instead
+              createFallbackDownload()
+              return
+            }
+            
+            mapCanvas.width = size[0]
+            mapCanvas.height = size[1]
+            const mapContext = mapCanvas.getContext('2d')
+            if (!mapContext) {
+              console.error('Could not get canvas context')
+              createFallbackDownload()
+              return
+            }
+            
+            // Set a white background
+            mapContext.fillStyle = '#ffffff'
+            mapContext.fillRect(0, 0, mapCanvas.width, mapCanvas.height)
+            
+            let hasDrawnAnyCanvas = false
+            
+            // Try to draw each canvas layer
+            Array.prototype.forEach.call(
+              map.getViewport().querySelectorAll('.ol-layer canvas, canvas.ol-layer'),
+              (canvas: HTMLCanvasElement) => {
+                if (canvas.width > 0 && canvas.height > 0) {
+                  try {
+                    const opacity = canvas.parentElement?.style.opacity || canvas.style.opacity
+                    mapContext.globalAlpha = opacity === '' ? 1 : Number(opacity)
+                    
+                    // Reset transform
+                    mapContext.setTransform(1, 0, 0, 1, 0, 0)
+                    
+                    // Get transform from canvas style
+                    const transform = canvas.style.transform
+                    if (transform && transform !== 'none') {
+                      const matrix = transform
+                        .match(/^matrix\(([^\)]*)\)$/)?.[1]
+                        ?.split(',')
+                        ?.map(Number)
+                      
+                      if (matrix && matrix.length === 6) {
+                        mapContext.setTransform(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5])
+                      }
+                    }
+                    
+                    mapContext.drawImage(canvas, 0, 0)
+                    hasDrawnAnyCanvas = true
+                    
+                    // Reset transform and alpha
+                    mapContext.setTransform(1, 0, 0, 1, 0, 0)
+                    mapContext.globalAlpha = 1
+                  } catch (e) {
+                    console.warn('Could not draw canvas layer (likely CORS restriction):', e)
                   }
-                  
-                  if (matrix) {
-                    mapContext.setTransform(...matrix)
-                  }
-                  mapContext.drawImage(canvas, 0, 0)
-                  mapContext.setTransform(1, 0, 0, 1, 0, 0)
-                  mapContext.globalAlpha = 1
-                } catch (e) {
-                  console.warn('Skipping canvas due to CORS restriction:', e)
                 }
               }
+            )
+            
+            // If no canvas was drawn (CORS issues), create a fallback image
+            if (!hasDrawnAnyCanvas) {
+              console.warn('No canvas layers could be drawn, creating fallback image')
+              
+              // Create a styled fallback
+              mapContext.fillStyle = '#f8f9fa'
+              mapContext.fillRect(0, 0, mapCanvas.width, mapCanvas.height)
+              
+              // Add border
+              mapContext.strokeStyle = '#e5e7eb'
+              mapContext.lineWidth = 2
+              mapContext.strokeRect(1, 1, mapCanvas.width - 2, mapCanvas.height - 2)
+              
+              // Add title
+              mapContext.fillStyle = '#1a1a1a'
+              mapContext.font = 'bold 24px Inter'
+              mapContext.textAlign = 'center'
+              mapContext.fillText(`Map of ${country.charAt(0).toUpperCase() + country.slice(1)}`, mapCanvas.width / 2, mapCanvas.height / 2 - 40)
+              
+              // Add overlay info
+              if (overlayInfo) {
+                mapContext.font = '18px Inter'
+                mapContext.fillStyle = '#0072bc'
+                mapContext.fillText(overlayInfo.name, mapCanvas.width / 2, mapCanvas.height / 2)
+                
+                if (overlayInfo.scenario) {
+                  mapContext.font = '14px Inter'
+                  mapContext.fillStyle = '#666'
+                  mapContext.fillText(`Scenario: ${overlayInfo.scenario}`, mapCanvas.width / 2, mapCanvas.height / 2 + 25)
+                }
+                
+                if (overlayInfo.year) {
+                  mapContext.fillText(`Year: ${overlayInfo.year}`, mapCanvas.width / 2, mapCanvas.height / 2 + 45)
+                }
+                
+                if (overlayInfo.season) {
+                  mapContext.fillText(`Season: ${overlayInfo.season}`, mapCanvas.width / 2, mapCanvas.height / 2 + 65)
+                }
+              } else {
+                mapContext.font = '16px Inter'
+                mapContext.fillStyle = '#666'
+                mapContext.fillText('No overlay selected', mapCanvas.width / 2, mapCanvas.height / 2 + 10)
+              }
+              
+              // Add note about CORS
+              mapContext.font = '12px Inter'
+              mapContext.fillStyle = '#999'
+              mapContext.fillText('(Map tiles could not be exported due to CORS restrictions)', mapCanvas.width / 2, mapCanvas.height - 30)
             }
-          )
-          
-          // Fallback: Create a simple map info image if canvas export fails
-          if (!mapCanvas.toDataURL().includes('data:image')) {
-            mapContext.fillStyle = '#f0f0f0'
-            mapContext.fillRect(0, 0, mapCanvas.width, mapCanvas.height)
-            mapContext.fillStyle = '#333'
-            mapContext.font = '16px Inter'
-            mapContext.textAlign = 'center'
-            mapContext.fillText(`Map of ${country}`, mapCanvas.width / 2, mapCanvas.height / 2)
-            mapContext.fillText(`${overlayInfo?.name || 'No overlay'}`, mapCanvas.width / 2, mapCanvas.height / 2 + 30)
+            
+            // Add metadata overlay
+            mapContext.fillStyle = 'rgba(255, 255, 255, 0.95)'
+            mapContext.fillRect(10, 10, 200, 80)
+            mapContext.strokeStyle = '#e5e7eb'
+            mapContext.lineWidth = 1
+            mapContext.strokeRect(10, 10, 200, 80)
+            
+            mapContext.fillStyle = '#1a1a1a'
+            mapContext.font = 'bold 12px Inter'
+            mapContext.textAlign = 'left'
+            mapContext.fillText('UN ESCAP Climate & Energy', 15, 25)
+            mapContext.fillText('Risk Visualization', 15, 40)
+            
+            mapContext.font = '10px Inter'
+            mapContext.fillStyle = '#666'
+            const view = map.getView()
+            const center = view.getCenter()
+            const zoom = view.getZoom()
+            if (center && zoom) {
+              mapContext.fillText(`Center: ${center[1].toFixed(3)}, ${center[0].toFixed(3)}`, 15, 55)
+              mapContext.fillText(`Zoom: ${zoom.toFixed(1)}`, 15, 70)
+              mapContext.fillText(`Generated: ${new Date().toISOString().split('T')[0]}`, 15, 85)
+            }
+            
+            // Download the image
+            const link = document.createElement('a')
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0]
+            const overlayName = overlayInfo?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'no_overlay'
+            link.download = `map_${country}_${overlayName}_${timestamp}.png`
+            link.href = mapCanvas.toDataURL('image/png', 1.0)
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            
+            console.log('Map downloaded successfully')
+            toast.success('Map downloaded successfully!')
+            setIsDownloading(false)
+            
+          } catch (error) {
+            console.error('Error creating map image:', error)
+            // Fallback to text-based download
+            createFallbackDownload()
           }
-          
-          const link = document.createElement('a')
-          link.download = `map_${id}_${country}_${Date.now()}.png`
-          link.href = mapCanvas.toDataURL()
-          link.click()
-        } catch (error) {
-          console.error('Error creating map image:', error)
-          // Show a user-friendly error message
-          alert('Unable to download map due to security restrictions. Please try using a different basemap.')
-        }
+        }, 100) // Small delay to ensure rendering is complete
       })
+      
+      // Force a render to trigger the event
       map.renderSync()
+      
     } catch (error) {
       console.error('Error initiating map download:', error)
+      createFallbackDownload()
+    }
+  }
+
+  const createFallbackDownload = () => {
+    try {
+      // Create a text-based map information file
+      const view = mapInstanceRef.current?.getView()
+      const center = view?.getCenter()
+      const zoom = view?.getZoom()
+      
+      const mapInfo = `UN ESCAP Climate & Energy Risk Visualization
+Map Information Export
+
+Country: ${country.charAt(0).toUpperCase() + country.slice(1)}
+Map ID: ${id}
+Basemap: ${basemap}
+${center ? `Center: ${center[1].toFixed(6)}, ${center[0].toFixed(6)}` : 'Center: Unknown'}
+${zoom ? `Zoom Level: ${zoom.toFixed(1)}` : 'Zoom: Unknown'}
+
+${overlayInfo ? `
+Overlay Information:
+- Type: ${overlayInfo.type}
+- Name: ${overlayInfo.name}
+${overlayInfo.scenario ? `- Scenario: ${overlayInfo.scenario}` : ''}
+${overlayInfo.year ? `- Year: ${overlayInfo.year}` : ''}
+${overlayInfo.season ? `- Season: ${overlayInfo.season}` : ''}
+` : 'No overlay selected'}
+
+Generated: ${new Date().toISOString()}
+
+Note: Map image could not be exported due to browser security restrictions.
+This file contains the map configuration for reference.
+`
+
+      const blob = new Blob([mapInfo], { type: 'text/plain' })
+      const link = document.createElement('a')
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0]
+      const overlayName = overlayInfo?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'no_overlay'
+      link.download = `map_info_${country}_${overlayName}_${timestamp}.txt`
+      link.href = URL.createObjectURL(blob)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(link.href)
+      
+      toast.warning('Map image not available - downloaded map information instead')
+      setIsDownloading(false)
+      
+    } catch (error) {
+      console.error('Error creating fallback download:', error)
+      toast.error('Unable to download map. Please try again.')
+      setIsDownloading(false)
     }
   }
 
@@ -379,10 +533,21 @@ export function MapComponent({
           {/* Download button */}
           <button
             onClick={handleDownload}
-            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
-            title="Download map as PNG"
+            disabled={isDownloading}
+            className={`p-1.5 rounded transition-colors ${
+              isDownloading 
+                ? 'text-muted-foreground cursor-not-allowed' 
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+            }`}
+            title={isDownloading ? "Preparing download..." : "Download map as PNG"}
           >
-            <Download size={16} />
+            {isDownloading ? (
+              <div className="animate-spin">
+                <Download size={16} />
+              </div>
+            ) : (
+              <Download size={16} />
+            )}
           </button>
         </div>
       </div>
