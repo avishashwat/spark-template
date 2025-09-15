@@ -73,14 +73,27 @@ export function DataUpload() {
     
     if (files.length === 0) return
 
-    const newFiles: UploadedFile[] = files.map(file => ({
-      id: crypto.randomUUID(),
-      name: file.name,
-      type: file.name.toLowerCase().endsWith('.tif') || file.name.toLowerCase().endsWith('.tiff') ? 'raster' : 'shapefile',
-      size: file.size,
-      lastModified: file.lastModified,
-      file
-    }))
+    const newFiles: UploadedFile[] = files.map(file => {
+      const fileName = file.name.toLowerCase()
+      let type: 'raster' | 'shapefile'
+      
+      if (fileName.endsWith('.tif') || fileName.endsWith('.tiff')) {
+        type = 'raster'
+      } else if (fileName.endsWith('.zip') || fileName.endsWith('.shp')) {
+        type = 'shapefile'
+      } else {
+        type = 'shapefile' // Default for other shapefile components
+      }
+      
+      return {
+        id: crypto.randomUUID(),
+        name: file.name,
+        type,
+        size: file.size,
+        lastModified: file.lastModified,
+        file
+      }
+    })
 
     setUploadedFiles(newFiles)
     toast.success(`${files.length} file(s) selected for upload`)
@@ -96,14 +109,27 @@ export function DataUpload() {
     
     if (files.length === 0) return
 
-    const newFiles: UploadedFile[] = files.map(file => ({
-      id: crypto.randomUUID(),
-      name: file.name,
-      type: file.name.toLowerCase().endsWith('.tif') || file.name.toLowerCase().endsWith('.tiff') ? 'raster' : 'shapefile',
-      size: file.size,
-      lastModified: file.lastModified,
-      file
-    }))
+    const newFiles: UploadedFile[] = files.map(file => {
+      const fileName = file.name.toLowerCase()
+      let type: 'raster' | 'shapefile'
+      
+      if (fileName.endsWith('.tif') || fileName.endsWith('.tiff')) {
+        type = 'raster'
+      } else if (fileName.endsWith('.zip') || fileName.endsWith('.shp')) {
+        type = 'shapefile'
+      } else {
+        type = 'shapefile' // Default for other shapefile components
+      }
+      
+      return {
+        id: crypto.randomUUID(),
+        name: file.name,
+        type,
+        size: file.size,
+        lastModified: file.lastModified,
+        file
+      }
+    })
 
     setUploadedFiles(newFiles)
     toast.success(`${files.length} file(s) dropped for upload`)
@@ -191,7 +217,7 @@ export function DataUpload() {
                 Upload Geospatial Files
               </CardTitle>
               <CardDescription>
-                Upload TIF raster files or shapefile bundles (.shp, .shx, .dbf, .prj)
+                Upload TIF raster files or ZIP files containing shapefiles
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -204,13 +230,13 @@ export function DataUpload() {
                 <CloudArrowUp className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-lg font-medium mb-2">Drop files here or click to browse</p>
                 <p className="text-sm text-muted-foreground">
-                  Supports TIF/TIFF raster files and shapefile bundles
+                  Supports TIF/TIFF raster files and ZIP files containing shapefiles
                 </p>
                 <input
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept=".tif,.tiff,.shp,.shx,.dbf,.prj"
+                  accept=".tif,.tiff,.zip"
                   onChange={handleFileSelect}
                   className="hidden"
                 />
