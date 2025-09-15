@@ -173,22 +173,20 @@ export function BoundaryManager({ onStatsUpdate }: BoundaryManagerProps) {
       setBoundaryFiles(updatedFiles)
       setUploadProgress(100)
       
-      // Reset form
-      setTimeout(() => {
-        setCurrentFile(null)
-        setShowConfiguration(false)
-        setShapefileAttributes([])
-        setHoverAttribute('')
-        setFileMetadata(null)
-        setIsUploading(false)
-        setUploadProgress(0)
-        if (fileInputRef.current) {
-          fileInputRef.current.value = ''
-        }
-      }, 1000)
-
       onStatsUpdate()
       toast.success('Boundary file uploaded successfully')
+      
+      // Reset form immediately after successful save
+      setCurrentFile(null)
+      setShowConfiguration(false)
+      setShapefileAttributes([])
+      setHoverAttribute('')
+      setFileMetadata(null)
+      setIsUploading(false)
+      setUploadProgress(0)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
 
     } catch (error) {
       console.error('Upload error:', error)

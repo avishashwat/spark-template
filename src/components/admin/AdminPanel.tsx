@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { SignOut, Database, Upload, MapPin, Gear } from '@phosphor-icons/react'
+import { SignOut, Database, Upload, MapPin, Gear, ArrowLeft } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { DataLayerManager } from './DataLayerManager'
 import { FileUploadManager } from './FileUploadManager'
@@ -38,7 +38,7 @@ export function AdminPanel() {
       // Load statistics from storage
       const rasters = await window.spark.kv.get<any[]>('admin_rasters') || []
       const shapefiles = await window.spark.kv.get<any[]>('admin_shapefiles') || []
-      const boundaries = await window.spark.kv.get<any[]>('admin_boundaries') || []
+      const boundaries = await window.spark.kv.get<any[]>('admin_boundary_files') || []
       
       setStats({
         totalRasters: rasters.length,
@@ -49,6 +49,14 @@ export function AdminPanel() {
     } catch (error) {
       console.error('Failed to load stats:', error)
     }
+  }
+
+  const handleBackToApp = () => {
+    // Remove admin parameter and redirect to main app
+    const url = new URL(window.location.href)
+    url.searchParams.delete('admin')
+    url.pathname = url.pathname.replace('/admin', '')
+    window.location.href = url.toString()
   }
 
   const handleSignOut = async () => {
@@ -76,6 +84,10 @@ export function AdminPanel() {
           </div>
           
           <div className="flex items-center space-x-4">
+            <Button variant="ghost" size="sm" onClick={handleBackToApp}>
+              <ArrowLeft size={16} className="mr-2" />
+              Back to App
+            </Button>
             {user && (
               <div className="flex items-center space-x-2 text-sm">
                 <img 
