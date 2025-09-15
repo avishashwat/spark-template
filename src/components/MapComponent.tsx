@@ -9,7 +9,7 @@ import { GeoJSON } from 'ol/format'
 import { Style, Stroke, Fill } from 'ol/style'
 import { Polygon, MultiPolygon } from 'ol/geom'
 import Feature from 'ol/Feature'
-import { Download, ChartBar, Table, MapPin, CaretDown } from '@phosphor-icons/react'
+import { Download, ChartBar, Table, MapPin, CaretDown, ArrowLeft } from '@phosphor-icons/react'
 import { ChartView, TableView } from './DataVisualization'
 import { RasterLegend } from './RasterLegend'
 import { EnergyLegend } from './EnergyLegend'
@@ -97,6 +97,11 @@ export function MapComponent({
   // Cache for processed mask geometries to avoid heavy re-computation
   const maskCache = useRef<Map<string, { maskFeature: any, boundaryLayer: VectorLayer<VectorSource> }>>(new Map())
   const [boundaryLoading, setBoundaryLoading] = useState(false)
+  
+  // Province zoom state
+  const [isProvinceView, setIsProvinceView] = useState(false)
+  const [selectedProvince, setSelectedProvince] = useState<any>(null)
+  const [countryView, setCountryView] = useState<{ center: [number, number], zoom: number } | null>(null)
   
   // Only show dropdown in multi-map mode (2 or 4 maps)
   const showViewSelector = mapLayout > 1
@@ -694,14 +699,14 @@ export function MapComponent({
           console.error('Invalid extent for boundary:', extent)
         }
         
-        // Add hover interaction for boundary features
-        console.log('Setting up hover interaction for attribute:', hoverAttribute)
+        // Add hover and click interactions for boundary features
+        console.log('Setting up hover and click interactions for attribute:', hoverAttribute)
         
         if (hoverAttribute) {
           // Create a select interaction for hover
           import('ol/interaction/Select').then(({ default: Select }) => {
-            import('ol/events/condition').then(({ pointerMove }) => {
-              const selectInteraction = new Select({
+            import('ol/events/condition').then(({ pointerMove, click }) => {
+              const hoverInteraction = new Select({
                 condition: pointerMove,
                 layers: [boundaryLayer],
                 style: new Style({
@@ -715,7 +720,22 @@ export function MapComponent({
                 })
               })
               
-              map.addInteraction(selectInteraction)
+              const clickInteraction = new Select({
+                condition: click,
+                layers: [boundaryLayer],
+                style: new Style({
+                  stroke: new Stroke({
+                    color: '#dc382d',
+                    width: 3
+                  }),
+                  fill: new Fill({
+                    color: 'rgba(220, 56, 45, 0.2)'
+                  })
+                })
+              })
+              
+              map.addInteraction(hoverInteraction)
+              map.addInteraction(clickInteraction)
               
               // Create a div for tooltip
               const tooltip = document.createElement('div')
@@ -732,15 +752,130 @@ export function MapComponent({
               `
               map.getViewport().appendChild(tooltip)
               
-              selectInteraction.on('select', (e) => {
+              hoverInteraction.on('select', (e) => {
                 if (e.selected.length > 0) {
                   const feature = e.selected[0]
                   const properties = feature.getProperties()
                   const name = properties[hoverAttribute] || 'Unknown'
-                  tooltip.innerHTML = name
+                  tooltip.innerHTML = `${name}<br><small>Click to zoom to province</small>`
                   tooltip.classList.remove('hidden')
                 } else {
                   tooltip.classList.add('hidden')
+                }
+              })
+              
+              // Handle province click to zoom
+              clickInteraction.on('select', (e) => {
+                if (e.selected.length > 0) {
+                  const feature = e.selected[0]
+                  const properties = feature.getProperties()
+                  const provinceName = properties[hoverAttribute] || 'Unknown Province'
+                  
+                  // Store current country view for back button
+                  const currentView = map.getView()
+                  setCountryView({
+                    center: currentView.getCenter() as [number, number],
+                    zoom: currentView.getZoom() || 7
+                  })
+                  
+                  // Get feature extent and zoom to province
+                  const geometry = feature.getGeometry()
+                  if (geometry) {
+                    const extent = geometry.getExtent()
+                    
+                    // Create a mask for the selected province
+                    const worldExtent = [-180, -90, 180, 90]
+                    let provinceMask: Feature | null = null
+                    
+                    try {
+                      // Import turf for geometric operations
+                      import('@turf/union').then(({ union }) => {
+                        import('@turf/helpers').then(({ polygon, multiPolygon, featureCollection }) => {
+                          // Convert feature geometry to turf format
+                          const geojsonFormat = new GeoJSON()
+                          const featureGeoJSON = geojsonFormat.writeFeatureObject(feature)
+                          
+                          let provinceGeometry = featureGeoJSON.geometry
+                          let allExteriorRings: number[][][] = []
+                          
+                          if (provinceGeometry.type === 'Polygon') {
+                            allExteriorRings.push(provinceGeometry.coordinates[0])
+                          } else if (provinceGeometry.type === 'MultiPolygon') {
+                            provinceGeometry.coordinates.forEach((polygon: number[][][]) => {
+                              if (polygon && polygon.length > 0) {
+                                allExteriorRings.push(polygon[0])
+                              }
+                            })
+                          }
+                          
+                          // Create the world polygon with holes for province
+                          const maskGeometry = {
+                            type: "Polygon",
+                            coordinates: [[
+                              [worldExtent[0], worldExtent[1]],
+                              [worldExtent[2], worldExtent[1]],
+                              [worldExtent[2], worldExtent[3]],
+                              [worldExtent[0], worldExtent[3]],
+                              [worldExtent[0], worldExtent[1]]
+                            ], ...allExteriorRings]
+                          }
+                          
+                          const maskGeoJSON = {
+                            type: "Feature",
+                            geometry: maskGeometry,
+                            properties: {}
+                          }
+                          
+                          provinceMask = geojsonFormat.readFeature(maskGeoJSON, {
+                            featureProjection: 'EPSG:4326',
+                            dataProjection: 'EPSG:4326'
+                          }) as Feature
+                          
+                          // Remove existing province mask if any
+                          const existingProvinceMask = layers.getArray().find(layer => 
+                            layer.get('layerType') === 'provinceMask'
+                          )
+                          if (existingProvinceMask) {
+                            layers.remove(existingProvinceMask)
+                          }
+                          
+                          // Add new province mask
+                          if (provinceMask) {
+                            const provinceMaskLayer = new VectorLayer({
+                              source: new VectorSource({
+                                features: [provinceMask]
+                              }),
+                              style: new Style({
+                                fill: new Fill({
+                                  color: 'rgba(128, 128, 128, 0.4)'
+                                })
+                              }),
+                              zIndex: 998
+                            })
+                            provinceMaskLayer.set('layerType', 'provinceMask')
+                            layers.insertAt(layers.getLength(), provinceMaskLayer)
+                          }
+                        })
+                      })
+                    } catch (error) {
+                      console.error('Error creating province mask:', error)
+                    }
+                    
+                    // Zoom to province with animation
+                    map.getView().fit(extent, {
+                      padding: [50, 50, 50, 50],
+                      duration: 500,
+                      maxZoom: 12
+                    })
+                    
+                    setIsProvinceView(true)
+                    setSelectedProvince({
+                      name: provinceName,
+                      feature: feature
+                    })
+                    
+                    toast.success(`Zoomed to ${provinceName}`)
+                  }
                 }
               })
               
@@ -753,7 +888,7 @@ export function MapComponent({
                 }
               })
               
-              console.log('Hover interaction setup complete')
+              console.log('Hover and click interactions setup complete')
             })
           })
         }
@@ -995,6 +1130,42 @@ export function MapComponent({
   
   const currentViewOption = viewModeOptions.find(option => option.value === viewMode)
 
+  // Function to go back to country view
+  const handleBackToCountry = useCallback(() => {
+    if (!mapInstanceRef.current || !countryView) return
+    
+    const map = mapInstanceRef.current
+    const layers = map.getLayers()
+    
+    // Remove province mask layer
+    const provinceMaskLayer = layers.getArray().find(layer => 
+      layer.get('layerType') === 'provinceMask'
+    )
+    if (provinceMaskLayer) {
+      layers.remove(provinceMaskLayer)
+    }
+    
+    // Restore country view
+    map.getView().animate({
+      center: countryView.center,
+      zoom: countryView.zoom,
+      duration: 500
+    })
+    
+    setIsProvinceView(false)
+    setSelectedProvince(null)
+    setCountryView(null)
+    
+    toast.success('Returned to country view')
+  }, [countryView])
+
+  // Reset province view when country changes
+  useEffect(() => {
+    setIsProvinceView(false)
+    setSelectedProvince(null)
+    setCountryView(null)
+  }, [country])
+
   // Preload all boundaries and mask layers on component mount for instant switching
   useEffect(() => {
     const preloadBoundaries = async () => {
@@ -1030,8 +1201,22 @@ export function MapComponent({
       <div className="flex items-center justify-between p-3 bg-card border-b border-border">
         <div className="flex-1">
           <div className="flex items-center gap-2">
+            {/* Back button for province view */}
+            {isProvinceView && (
+              <button
+                onClick={handleBackToCountry}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded transition-colors"
+                title="Back to country view"
+              >
+                <ArrowLeft size={12} />
+                Back
+              </button>
+            )}
             <h3 className="font-medium text-sm text-foreground capitalize">
-              {country} - Map {id.split('-')[1]}
+              {isProvinceView 
+                ? `${selectedProvince?.name || 'Province'} - ${country}` 
+                : `${country} - Map ${id.split('-')[1]}`
+              }
             </h3>
             {isActive && (
               <span className="bg-primary text-primary-foreground px-2 py-0.5 rounded text-xs font-medium">
@@ -1040,7 +1225,10 @@ export function MapComponent({
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {getOverlayDisplayText()}
+            {isProvinceView 
+              ? `Province view - Click "Back" to see full ${country}` 
+              : getOverlayDisplayText()
+            }
           </p>
         </div>
         
