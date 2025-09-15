@@ -102,7 +102,7 @@ export function RasterClassificationConfig({
         min,
         max,
         color: defaultColors[i],
-        label: `Class ${i + 1}`
+        label: `(${min}) - (${max})`
       })
     }
     
@@ -131,21 +131,26 @@ export function RasterClassificationConfig({
         return
       }
       
-      // When updating max value, automatically update next class's min
+      // When updating max value, automatically update next class's min and update labels
       setClassifications(prev => {
         const updated = prev.map(cls => 
-          cls.id === id ? { ...cls, [field]: numValue } : cls
+          cls.id === id ? { 
+            ...cls, 
+            [field]: numValue,
+            label: `(${cls.min}) - (${numValue})` // Update current class label
+          } : cls
         )
         
         // Find current class index
         const currentIndex = updated.findIndex(cls => cls.id === id)
         
-        // If not the last class, update next class's min
+        // If not the last class, update next class's min and label
         if (currentIndex >= 0 && currentIndex < updated.length - 1) {
           const nextMin = numValue + getSmallestIncrement(numValue)
           updated[currentIndex + 1] = {
             ...updated[currentIndex + 1],
-            min: nextMin
+            min: nextMin,
+            label: `(${nextMin}) - (${updated[currentIndex + 1].max})` // Update next class label
           }
         }
         
