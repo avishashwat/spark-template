@@ -27,30 +27,28 @@ export function useGeospatialService() {
   
   const [uploadJobs, setUploadJobs] = useState<UploadJob[]>([])
   
-  // Check service health
+  // Check service health - Mock version for demo
   const checkServiceHealth = useCallback(async () => {
     try {
-      const response = await fetch('/api/geospatial/health')
-      const health = await response.json()
-      
+      // Mock successful connection for demo
       setService(prev => ({
         ...prev,
-        isConnected: health.status === 'healthy',
+        isConnected: true,
         error: null
       }))
       
-      return health.status === 'healthy'
+      return true
     } catch (error) {
       setService(prev => ({
         ...prev,
         isConnected: false,
-        error: 'Failed to connect to geospatial service'
+        error: 'Service not available in demo mode'
       }))
       return false
     }
   }, [])
   
-  // Upload and process raster file
+  // Upload and process raster file - Mock version for demo
   const uploadRaster = useCallback(async (
     file: File, 
     metadata: {
@@ -63,25 +61,25 @@ export function useGeospatialService() {
       styleInfo?: any
     }
   ): Promise<string> => {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('file_type', 'raster')
-    formData.append('metadata', JSON.stringify(metadata))
+    // Mock upload process for demo
+    const jobId = `mock-raster-${Date.now()}`
     
-    const response = await fetch('/api/geospatial/upload', {
-      method: 'POST',
-      body: formData
-    })
+    // Simulate upload processing
+    setTimeout(() => {
+      setUploadJobs(prev => [...prev, {
+        id: jobId,
+        fileName: file.name,
+        fileType: 'raster',
+        status: 'completed',
+        progress: 100,
+        result: { layerName: `${metadata.country}_${metadata.variable}` }
+      }])
+    }, 2000)
     
-    if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`)
-    }
-    
-    const result = await response.json()
-    return result.job_id
+    return jobId
   }, [])
   
-  // Upload and process shapefile
+  // Upload and process shapefile - Mock version for demo
   const uploadShapefile = useCallback(async (
     file: File,
     metadata: {
@@ -92,25 +90,25 @@ export function useGeospatialService() {
       iconType?: string
     }
   ): Promise<string> => {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('file_type', 'shapefile')
-    formData.append('metadata', JSON.stringify(metadata))
+    // Mock upload process for demo
+    const jobId = `mock-shapefile-${Date.now()}`
     
-    const response = await fetch('/api/geospatial/upload', {
-      method: 'POST',
-      body: formData
-    })
+    // Simulate upload processing
+    setTimeout(() => {
+      setUploadJobs(prev => [...prev, {
+        id: jobId,
+        fileName: file.name,
+        fileType: 'shapefile',
+        status: 'completed',
+        progress: 100,
+        result: { layerName: `${metadata.country}_${metadata.infrastructureType}` }
+      }])
+    }, 2000)
     
-    if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`)
-    }
-    
-    const result = await response.json()
-    return result.job_id
+    return jobId
   }, [])
   
-  // Upload boundary shapefile
+  // Upload boundary shapefile - Mock version for demo
   const uploadBoundary = useCallback(async (
     file: File,
     metadata: {
@@ -119,68 +117,75 @@ export function useGeospatialService() {
       nameField: string
     }
   ): Promise<string> => {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('file_type', 'boundary')
-    formData.append('metadata', JSON.stringify(metadata))
+    // Mock upload process for demo
+    const jobId = `mock-boundary-${Date.now()}`
     
-    const response = await fetch('/api/geospatial/upload', {
-      method: 'POST',
-      body: formData
-    })
+    // Simulate upload processing
+    setTimeout(() => {
+      setUploadJobs(prev => [...prev, {
+        id: jobId,
+        fileName: file.name,
+        fileType: 'boundary',
+        status: 'completed',
+        progress: 100,
+        result: { layerName: `${metadata.country}_boundary` }
+      }])
+    }, 2000)
     
-    if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`)
-    }
-    
-    const result = await response.json()
-    return result.job_id
+    return jobId
   }, [])
   
-  // Get job status
+  // Get job status - Mock version for demo
   const getJobStatus = useCallback(async (jobId: string): Promise<UploadJob | null> => {
     try {
-      const response = await fetch(`/api/geospatial/jobs/${jobId}`)
-      if (!response.ok) return null
-      
-      const job = await response.json()
-      return job
+      // Return mock job status
+      const existingJob = uploadJobs.find(job => job.id === jobId)
+      return existingJob || null
     } catch (error) {
       console.error('Failed to get job status:', error)
       return null
     }
-  }, [])
+  }, [uploadJobs])
   
-  // Get available datasets
+  // Get available datasets - Mock version for demo
   const getAvailableDatasets = useCallback(async (country: string) => {
     try {
-      const response = await fetch(`/api/geospatial/datasets/${country}`)
-      if (!response.ok) throw new Error('Failed to fetch datasets')
-      
-      const datasets = await response.json()
-      return datasets
+      // Return mock datasets for demo
+      return {
+        climate: [
+          { name: 'Maximum Temperature', variable: 'max_temp', scenarios: ['Historical', 'SSP1', 'SSP2'] },
+          { name: 'Minimum Temperature', variable: 'min_temp', scenarios: ['Historical', 'SSP1', 'SSP2'] },
+          { name: 'Precipitation', variable: 'precipitation', scenarios: ['Historical', 'SSP1', 'SSP2'] }
+        ],
+        giri: [
+          { name: 'Flood Risk', variable: 'flood', scenarios: ['Existing', 'SSP1', 'SSP5'] },
+          { name: 'Drought Risk', variable: 'drought', scenarios: ['Existing', 'SSP1', 'SSP5'] }
+        ],
+        energy: [
+          { name: 'Hydro Power Plants', type: 'hydro' },
+          { name: 'Solar Power Plants', type: 'solar' },
+          { name: 'Wind Power Plants', type: 'wind' }
+        ],
+        boundaries: [
+          { name: `${country} Administrative Boundaries`, level: 1 }
+        ]
+      }
     } catch (error) {
       console.error('Failed to get available datasets:', error)
       return { climate: [], giri: [], energy: [], boundaries: [] }
     }
   }, [])
   
-  // Get WMS URL for raster layer
+  // Get WMS URL for raster layer - Mock version for demo
   const getWMSUrl = useCallback((layerName: string) => {
-    const baseUrl = process.env.NODE_ENV === 'production' 
-      ? `${window.location.protocol}//${window.location.host}/geoserver`
-      : 'http://localhost:8080/geoserver'
-    
-    return `${baseUrl}/wms`
+    // Return OpenStreetMap tile service for demo (no WMS needed)
+    return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
   }, [])
   
-  // Get WFS URL for vector layer
+  // Get WFS URL for vector layer - Mock version for demo
   const getWFSUrl = useCallback((layerName: string) => {
-    const baseUrl = process.env.NODE_ENV === 'production' 
-      ? `${window.location.protocol}//${window.location.host}/geoserver`
-      : 'http://localhost:8080/geoserver'
-    
-    return `${baseUrl}/wfs`
+    // Return mock URL for demo
+    return 'https://demo.geoserver.org/wfs'
   }, [])
   
   // Monitor job progress via WebSocket or polling
