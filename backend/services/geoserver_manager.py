@@ -12,7 +12,7 @@ class GeoServerManager:
     """Manages GeoServer interactions for publishing layers and services"""
     
     def __init__(self):
-        self.base_url = os.getenv("GEOSERVER_URL", "http://localhost:8080/geoserver")
+        self.base_url = os.getenv("GEOSERVER_URL", "http://geoserver:8080/geoserver")
         self.username = os.getenv("GEOSERVER_USER", "admin")
         self.password = os.getenv("GEOSERVER_PASSWORD", "geoserver_admin_2024")
         self.workspace = "escap_climate"
@@ -26,7 +26,7 @@ class GeoServerManager:
         self.session = None
     
     async def initialize(self):
-        """Initialize GeoServer workspace and datastore"""
+        """Initialize GeoServer workspace and datastore with retry logic"""
         
         self.session = aiohttp.ClientSession(
             auth=aiohttp.BasicAuth(self.username, self.password),
@@ -35,18 +35,39 @@ class GeoServerManager:
         
         logger.info("Initializing GeoServer workspace", workspace=self.workspace)
         
-        try:
-            # Create workspace
-            await self._create_workspace()
-            
-            # Create PostGIS datastore
-            await self._create_postgis_datastore()
-            
-            logger.info("GeoServer initialization completed successfully")
-            
-        except Exception as e:
-            logger.error("Failed to initialize GeoServer", error=str(e))
-            raise
+        # Retry logic for GeoServer initialization
+        max_retries = 30  # 30 seconds worth of retries
+        retry_delay = 1   # 1 second between retries
+        
+        for attempt in range(max_retries):
+            try:
+                # Test GeoServer connection first
+                async with self.session.get(f"{self.rest_url}/about/version") as response:
+                    if response.status != 200:
+                        raise aiohttp.ClientError(f"GeoServer not ready, status: {response.status}")
+                
+                # Create workspace
+                await self._create_workspace()
+                
+                # Create PostGIS datastore
+                await self._create_postgis_datastore()
+                
+                logger.info("GeoServer initialization completed successfully")
+                return
+                
+            except (aiohttp.ClientError, asyncio.TimeoutError, ConnectionRefusedError) as e:
+                if attempt < max_retries - 1:
+                    logger.info(f"GeoServer not ready, retrying in {retry_delay}s", 
+                              attempt=attempt + 1, max_retries=max_retries)
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger.error("Failed to initialize GeoServer after all retries", error=str(e))
+                    # Don't raise - allow the service to start without GeoServer
+                    break
+            except Exception as e:
+                logger.error("Unexpected error during GeoServer initialization", error=str(e))
+                # Don't raise - allow the service to start without GeoServer
+                break
     
     async def cleanup(self):
         """Cleanup resources"""

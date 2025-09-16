@@ -65,16 +65,28 @@ async def startup_event():
     """Initialize services and connections on startup"""
     logger.info("Starting ESCAP Climate Risk API")
     
-    # Initialize GeoServer workspace
-    await geoserver_manager.initialize()
-    
-    # Initialize spatial cache
-    await spatial_cache.initialize()
+    # Initialize spatial cache first (doesn't depend on other services)
+    try:
+        await spatial_cache.initialize()
+        logger.info("Spatial cache initialized successfully")
+    except Exception as e:
+        logger.warning("Failed to initialize spatial cache", error=str(e))
     
     # Start collaboration manager
-    await collaboration_manager.start()
+    try:
+        await collaboration_manager.start()
+        logger.info("Collaboration manager started successfully")
+    except Exception as e:
+        logger.warning("Failed to start collaboration manager", error=str(e))
     
-    logger.info("All services initialized successfully")
+    # Initialize GeoServer workspace (retry logic handled internally)
+    try:
+        await geoserver_manager.initialize()
+        logger.info("GeoServer initialized successfully")
+    except Exception as e:
+        logger.warning("Failed to initialize GeoServer, will retry later", error=str(e))
+    
+    logger.info("API startup completed")
 
 @app.on_event("shutdown")
 async def shutdown_event():
