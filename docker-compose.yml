@@ -79,14 +79,17 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://localhost:8000
-      - VITE_GEOSERVER_URL=http://localhost:8081/geoserver
+      - VITE_API_URL=http://backend:8000
+      - VITE_GEOSERVER_URL=http://geoserver:8080/geoserver
+      - NODE_ENV=development
     volumes:
       - .:/app
       - /app/node_modules
     networks:
       - escap_network
     restart: unless-stopped
+    depends_on:
+      - backend
 
   # FastAPI Backend for data processing
   backend:
