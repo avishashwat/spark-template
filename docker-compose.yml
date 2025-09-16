@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostGIS Database for spatial data storage
   postgis:
@@ -72,6 +70,25 @@ services:
     restart: unless-stopped
     command: redis-server --appendonly yes
 
+  # React Frontend Application
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: escap_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_GEOSERVER_URL=http://localhost:8081/geoserver
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - escap_network
+    restart: unless-stopped
+    command: npm run dev -- --host 0.0.0.0 --port 3000
+
   # FastAPI Backend for data processing
   backend:
     build:
@@ -113,6 +130,7 @@ services:
     networks:
       - escap_network
     depends_on:
+      - frontend
       - backend
       - geoserver
     restart: unless-stopped
