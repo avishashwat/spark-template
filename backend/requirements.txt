@@ -44,6 +44,10 @@ httpx==0.25.2
 requests==2.31.0
 aiohttp==3.9.1
 
+# Missing dependencies for GeoServer integration
+xmltodict==0.13.0
+lxml==4.9.3
+
 # Development tools (optional)
 pytest==7.4.3
 pytest-asyncio==0.21.1

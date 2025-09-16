@@ -36,8 +36,8 @@ class GeoServerManager:
         logger.info("Initializing GeoServer workspace", workspace=self.workspace)
         
         # Retry logic for GeoServer initialization
-        max_retries = 30  # 30 seconds worth of retries
-        retry_delay = 1   # 1 second between retries
+        max_retries = 60  # 60 seconds worth of retries
+        retry_delay = 2   # 2 seconds between retries
         
         for attempt in range(max_retries):
             try:

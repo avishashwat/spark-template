@@ -80,11 +80,17 @@ async def startup_event():
         logger.warning("Failed to start collaboration manager", error=str(e))
     
     # Initialize GeoServer workspace (retry logic handled internally)
-    try:
-        await geoserver_manager.initialize()
-        logger.info("GeoServer initialized successfully")
-    except Exception as e:
-        logger.warning("Failed to initialize GeoServer, will retry later", error=str(e))
+    # Use asyncio task to prevent blocking startup if GeoServer takes time
+    async def init_geoserver_later():
+        await asyncio.sleep(5)  # Give GeoServer time to start
+        try:
+            await geoserver_manager.initialize()
+            logger.info("GeoServer initialized successfully")
+        except Exception as e:
+            logger.error("Failed to initialize GeoServer", error=str(e))
+    
+    # Start GeoServer initialization in background
+    asyncio.create_task(init_geoserver_later())
     
     logger.info("API startup completed")
 
