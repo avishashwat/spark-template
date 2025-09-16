@@ -23,11 +23,11 @@ COPY gdal-service/ ./
 # Create necessary directories
 RUN mkdir -p /app/data /app/uploads /app/processed /app/temp
 
-# Set permissions
-RUN chmod +x /app/start.sh
+# Set permissions for directories  
+RUN chmod 755 /app/data /app/uploads /app/processed /app/temp
 
 # Expose port
 EXPOSE 8081
 
 # Start the service
-CMD ["./start.sh"]
+CMD ["python3", "main.py"]

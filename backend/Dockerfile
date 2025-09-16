@@ -31,7 +31,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p uploads cog processed logs
+RUN mkdir -p uploads cog processed logs temp
+
+# Set permissions for directories
+RUN chmod 755 uploads cog processed logs temp
 
 EXPOSE 8000
 
