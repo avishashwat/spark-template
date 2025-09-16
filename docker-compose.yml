@@ -87,7 +87,6 @@ services:
     networks:
       - escap_network
     restart: unless-stopped
-    command: npm run dev -- --host 0.0.0.0 --port 3000
 
   # FastAPI Backend for data processing
   backend:
